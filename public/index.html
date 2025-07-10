@@ -327,7 +327,10 @@
                     if (result.success) {
                         this.log(`✓ Execution completed: ${result.state.steps} steps`, 'success');
                         this.showStatus(`Executed ${result.state.steps} instructions`, 'success');
-                        this.updateDebugInfo();
+                        
+                        // Get current CPU state to update debug panels
+                        await this.refreshDebugPanels();
+                        
                     } else {
                         this.log(`✗ Execution failed: ${result.error}`, 'error');
                         this.showStatus(result.error, 'error');
@@ -337,7 +340,55 @@
                     this.showStatus('Execution failed', 'error');
                 }
             }
-            
+            async refreshDebugPanels() {
+                try {
+                    console.log('Refreshing debug panels...');
+                    
+                    // Try to get current state via step endpoint
+                    const response = await fetch('/step');
+                    const result = await response.json();
+                    
+                    console.log('Step response for debug refresh:', result);
+                    
+                    if (result.success) {
+                        this.updateDebugInfo(result);
+                        this.log('Debug panels updated', 'info');
+                    } else {
+                        // If step fails, try to get stats instead
+                        console.log('Step failed, trying stats endpoint...');
+                        
+                        try {
+                            const statsResponse = await fetch('/stats');
+                            const statsResult = await statsResponse.json();
+                            
+                            if (statsResult.success) {
+                                // Convert stats format to something updateDebugInfo can use
+                                const convertedResult = {
+                                    cpu: {
+                                        pc: 0, // We don't have PC in stats
+                                        finished: true,
+                                        stats: statsResult.statistics.cpu
+                                    },
+                                    memory: {
+                                        chipRam: [] // Empty for now
+                                    }
+                                };
+                                
+                                this.updateDebugInfo(convertedResult);
+                                this.log('Debug panels updated from stats', 'info');
+                            } else {
+                                this.log('Could not get stats either', 'error');
+                            }
+                        } catch (statsError) {
+                            console.error('Stats request failed:', statsError);
+                            this.log('Debug panel refresh failed', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Debug refresh error:', error);
+                    this.log('Debug panel refresh failed', 'error');
+                }
+            }
             async step() {
                 try {
                     const response = await fetch('/step');
@@ -497,29 +548,103 @@
             }
             
             updateDebugInfo(result) {
-                if (!result) return;
+                console.log('Updating debug info with result:', result); // Debug log
+                
+                if (!result) {
+                    console.log('No result data for debug update');
+                    return;
+                }
                 
                 const cpuState = document.getElementById('cpuState');
                 const memoryState = document.getElementById('memoryState');
                 
-                // Update CPU state
-                cpuState.innerHTML = `
-                    <strong>Program Counter:</strong> 0x${result.cpu.pc.toString(16).padStart(8, '0')}<br>
-                    <strong>Status Register:</strong> 0x${result.cpu.flags ? '----' : '----'}<br>
-                    <strong>Data Registers:</strong><br>
-                    ${result.cpu.registers.d ? result.cpu.registers.d.map((reg, i) => 
-                        `D${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}<br>
-                    <strong>Address Registers:</strong><br>
-                    ${result.cpu.registers.a ? result.cpu.registers.a.map((reg, i) => 
-                        `A${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}
-                `;
+                if (!cpuState || !memoryState) {
+                    console.error('Debug panel elements not found!');
+                    return;
+                }
+                
+                // Handle different response formats
+                let cpuData = null;
+                let memoryData = null;
+                
+                if (result.cpu) {
+                    // Normal step response format
+                    cpuData = result.cpu;
+                    memoryData = result.memory;
+                } else if (result.success && result.message === 'Execution already finished') {
+                    // This is the "finished" response - we need to show something useful
+                    cpuState.innerHTML = `
+                        <strong>Execution Status:</strong> 🏁 Program Finished<br>
+                        <strong>Message:</strong> ${result.message || 'Execution completed'}<br>
+                        <br>
+                        <em>Use "Reset" to clear state or "Step" to see final registers</em>
+                    `;
+                    
+                    if (result.memory) {
+                        memoryData = result.memory;
+                    } else {
+                        memoryState.innerHTML = 'Program finished - use Reset to clear';
+                    }
+                    return;
+                } else {
+                    // Unknown format
+                    console.log('Unknown result format:', result);
+                    cpuState.innerHTML = 'Unknown response format - check console';
+                    return;
+                }
+                
+                // Update CPU state with proper data
+                if (cpuData) {
+                    let cpuHtml = `
+                        <strong>Program Counter:</strong> 0x${cpuData.pc ? cpuData.pc.toString(16).padStart(8, '0') : '00000000'}<br>
+                        <strong>Status:</strong> ${cpuData.finished ? '🏁 Finished' : cpuData.running ? '▶️ Running' : '⏸️ Stopped'}<br>
+                    `;
+                    
+                    // Add instruction info if available
+                    if (cpuData.instruction) {
+                        cpuHtml += `<strong>Last Instruction:</strong> ${cpuData.instruction}<br>`;
+                    }
+                    
+                    // Add mini statistics if available
+                    if (cpuData.stats) {
+                        cpuHtml += `<br><strong>Instructions Executed:</strong> ${cpuData.stats.totalInstructions}<br>`;
+                        cpuHtml += `<strong>Implemented:</strong> ${cpuData.stats.implementedCount} (${cpuData.stats.implementedPercent}%)<br>`;
+                        
+                        if (cpuData.stats.topUnknown && cpuData.stats.topUnknown.length > 0) {
+                            const topUnknown = cpuData.stats.topUnknown[0];
+                            cpuHtml += `<strong>Most Common Unknown:</strong> ${topUnknown[0]} (${topUnknown[1]}x)<br>`;
+                        }
+                    }
+                    
+                    cpuHtml += `<br><strong>Data Registers:</strong><br>`;
+                    if (cpuData.registers && cpuData.registers.d) {
+                        cpuData.registers.d.forEach((reg, i) => {
+                            cpuHtml += `D${i}: 0x${reg.toString(16).padStart(8, '0')}<br>`;
+                        });
+                    } else {
+                        cpuHtml += 'Register data not available<br>';
+                    }
+                    
+                    cpuHtml += `<strong>Address Registers:</strong><br>`;
+                    if (cpuData.registers && cpuData.registers.a) {
+                        cpuData.registers.a.forEach((reg, i) => {
+                            cpuHtml += `A${i}: 0x${reg.toString(16).padStart(8, '0')}<br>`;
+                        });
+                    } else {
+                        cpuHtml += 'Register data not available<br>';
+                    }
+                    
+                    cpuState.innerHTML = cpuHtml;
+                } else {
+                    cpuState.innerHTML = 'No CPU data available';
+                }
                 
                 // Update memory state
-                if (result.memory && result.memory.chipRam) {
+                if (memoryData && memoryData.chipRam) {
                     let memoryHtml = '<strong>Chip RAM (first 256 bytes):</strong><br>';
-                    for (let i = 0; i < Math.min(256, result.memory.chipRam.length); i += 16) {
+                    for (let i = 0; i < Math.min(256, memoryData.chipRam.length); i += 16) {
                         const address = i.toString(16).padStart(6, '0');
-                        const bytes = result.memory.chipRam.slice(i, i + 16)
+                        const bytes = memoryData.chipRam.slice(i, i + 16)
                             .map(b => b.toString(16).padStart(2, '0'))
                             .join(' ');
                         memoryHtml += `${address}: ${bytes}<br>`;
@@ -528,8 +653,9 @@
                 } else {
                     memoryState.innerHTML = 'No memory data available';
                 }
-            }
-            
+                
+                console.log('Debug info update completed');
+            }            
             updateDisplay(displayData) {
                 if (!displayData || !displayData.pixels) return;
                 

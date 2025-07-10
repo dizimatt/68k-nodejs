@@ -20,12 +20,43 @@ class SimpleCPU {
         this.stackBase = 0;
         this.stackTop = 0;
         this.initialSP = 0;
-        this.programFinished = false;  // Track if program has finished
-        this.exitAddressLow = 0x0004;  // Our exit address pattern
+        this.programFinished = false;
+        this.exitAddressLow = 0x0004;
+        this.finishedMessageShown = false;
+        this.initialized = false;  // Track initialization state
+        
+        console.log('🏗️ [CPU] Constructor - initialized flag set to false');
     }
-    
-    // ... existing methods (to32BitAddress, initialize, etc.) ...
-    
+    isInitialized() {
+        console.log(`🔍 [CPU] Checking initialized state: ${this.initialized}`);
+        return this.initialized;
+    }
+    resetExecution() {
+        console.log(`🔄 [CPU] Resetting execution state (keeping initialization)...`);
+        
+        // DON'T reset the initialized flag - that's the key fix
+        // this.initialized = false;  // ← REMOVE THIS LINE IF IT EXISTS
+        
+        // Reset execution flags
+        this.programFinished = false;
+        this.finishedMessageShown = false;
+        this.running = true;
+        
+        // Reset statistics
+        this.instructionStats.clear();
+        this.unknownInstructions.clear();
+        this.totalInstructions = 0;
+        this.implementedCount = 0;
+        this.unimplementedCount = 0;
+        this.zeroOpcodeCount = 0;
+        
+        // Reset PC to original program entry (find it from memory)
+        // We should restore PC to the original entry point
+        // For now, we'll leave PC as-is since we don't store the original entry
+        
+        console.log(`📍 [CPU] Execution reset, PC=${this.registers.pc.toString(16)}, SP=0x${this.registers.a[7].toString(16).padStart(8, '0')}`);
+        console.log(`🏁 [CPU] Initialized flag remains: ${this.initialized}`);
+    }
     to32BitAddress(value) {
         return (value >>> 0);
     }
@@ -42,6 +73,7 @@ class SimpleCPU {
         
         // Reset execution state
         this.programFinished = false;
+        this.finishedMessageShown = false;
         
         // Push exit address pattern
         const exitAddressHigh = 0x0000;
@@ -56,12 +88,15 @@ class SimpleCPU {
         console.log(`🚪 [CPU] Exit pattern: 0x${exitAddressHigh.toString(16).padStart(4, '0')}${this.exitAddressLow.toString(16).padStart(4, '0')} (pushed as two words)`);
         
         this.running = true;
+        this.initialized = true;  // IMPORTANT: Mark as initialized
+        
+        console.log(`✅ [CPU] Initialization complete - initialized flag set to TRUE`);
     }
     
     setProgramCounter(address) {
         this.initialize(this.to32BitAddress(address));
     }
-    
+
     getProgramCounter() {
         return this.to32BitAddress(this.registers.pc);
     }
@@ -195,7 +230,11 @@ class SimpleCPU {
     step() {
         // Check if execution has already finished
         if (!this.running || this.programFinished) {
-            console.log(`🛑 [CPU] Execution already finished - no more steps`);
+            // Only log this message once, not repeatedly
+            if (!this.finishedMessageShown) {
+                console.log(`🛑 [CPU] Execution already finished - no more steps`);
+                this.finishedMessageShown = true;
+            }
             return { instruction: 'FINISHED', cycles: 0, finished: true };
         }
         
@@ -215,6 +254,8 @@ class SimpleCPU {
         
         // Advance PC by 2 (32-bit address arithmetic)
         this.registers.pc = this.to32BitAddress(this.registers.pc + 2);
+        
+        console.log(`📍 [CPU] After instruction fetch: PC advanced from 0x${oldPC.toString(16)} to 0x${this.registers.pc.toString(16)}`);
         
         const instrType = this.getInstructionInfo(instruction);
         this.updateStats(instruction, instrType);
@@ -246,8 +287,7 @@ class SimpleCPU {
             console.log(`🟢 [IMPLEMENTED] NOP at PC=0x${oldPC.toString(16).padStart(8, '0')} - No operation`);
             this.implementedCount++;
             return { instruction: 'NOP', cycles: 4 };
-        }
-        
+        }        
         // 🚧 PARTIALLY IMPLEMENTED - JSR variants
         if ((instruction & 0xFFC0) === 0x4E80) { // JSR absolute.W
             const target = this.memory.readWord(this.registers.pc);
@@ -377,23 +417,35 @@ class SimpleCPU {
     }
     
     reset() {
+        console.log("🔄 [CPU] Complete reset - clearing all state...");
+        
+        // Reset all registers to 0
         this.registers.d.fill(0);
-        this.registers.a.fill(0);
+        this.registers.a.fill(0);  // This includes A7 (stack pointer)
         this.registers.pc = 0;
         this.registers.sr = 0;
+        
+        // Reset execution state
         this.running = true;
-        this.programFinished = false;  // Reset finished state
+        this.programFinished = false;
+        this.finishedMessageShown = false;
+        
+        // Reset statistics
         this.instructionStats.clear();
         this.unknownInstructions.clear();
         this.totalInstructions = 0;
         this.implementedCount = 0;
         this.unimplementedCount = 0;
         this.zeroOpcodeCount = 0;
+        
+        // Reset stack and initialization state
         this.stackBase = 0;
         this.stackTop = 0;
         this.initialSP = 0;
+        this.initialized = false;  // Mark as not initialized - this is correct for full reset
         
-        console.log("🔄 [CPU] Reset - all statistics and 32-bit addressing cleared");
+        console.log("✅ [CPU] Reset complete - all registers cleared, will reinitialize on next run");
+        console.log(`📊 [CPU] Register state: A7=${this.registers.a[7]}, PC=${this.registers.pc}, initialized=${this.initialized}`);
     }
 }
 
