@@ -152,7 +152,9 @@ class AmigaInterpreter {
                     stats: this.cpu.getStatistics(),
                     finished: true,
                     error: false,
-                    running: false
+                    running: false,
+                    instruction: 'FINISHED',
+                    cycles: 0
                 },
                 memory: {
                     chipRam: this.memory.getChipRamSample(),
@@ -183,7 +185,14 @@ class AmigaInterpreter {
                 error: cpuResult.error,
                 running: this.cpu.isRunning(),
                 instruction: cpuResult.instruction,
-                cycles: cpuResult.cycles
+                cycles: cpuResult.cycles,
+                // Enhanced debug information from CPU
+                asm: cpuResult.asm,
+                description: cpuResult.description,
+                oldValue: cpuResult.oldValue,
+                newValue: cpuResult.newValue,
+                target: cpuResult.target,
+                immediate: cpuResult.immediate
             },
             memory: {
                 chipRam: this.memory.getChipRamSample(),
@@ -191,8 +200,7 @@ class AmigaInterpreter {
             },
             display: this.canvas.getPixelData()
         };
-    }
-    
+    }    
     // Add method to get detailed statistics
     getDetailedStats() {
         if (!this.cpu) {

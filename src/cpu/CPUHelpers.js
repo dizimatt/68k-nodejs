@@ -118,7 +118,21 @@ const CPUHelpers = {
                            (this.flag_x ? 0x10 : 0) |
                            (this.flag_s ? 0x2000 : 0);
     },
-    
+    setFlagsAdd32(src, dst, result) {
+        this.flag_z = result === 0 ? 1 : 0;
+        this.flag_n = (result & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_c = result > 0xFFFFFFFF ? 1 : 0;
+        this.flag_v = ((src ^ result) & (dst ^ result) & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_x = this.flag_c;
+    },
+
+    setFlagsSub32(dst, src, result) {
+        this.flag_z = result === 0 ? 1 : 0;
+        this.flag_n = (result & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_c = result < 0 ? 1 : 0;
+        this.flag_v = ((dst ^ src) & (dst ^ result) & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_x = this.flag_c;
+    },    
     // Exception handling
     exception_privilege_violation() {
         console.log('🚨 [CPU] Privilege violation exception');

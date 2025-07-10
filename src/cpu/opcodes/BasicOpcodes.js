@@ -1,4 +1,4 @@
-// src/cpu/opcodes/BasicOpcodes.js - Basic CPU Operations (FIXED)
+// src/cpu/opcodes/BasicOpcodes.js - Basic CPU Operations (WITH DEBUG LOGGING)
 
 const BasicOpcodes = {
     setup(opcodeTable, cpu) {
@@ -21,49 +21,120 @@ const BasicOpcodes = {
     
     // Basic opcode implementations
     op_nop() {
+        const pc = this.registers.pc - 2; // PC was already advanced
+        
+        // Debug logging
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: NOP                    ; No operation`);
+        
         this.cycles += 4;
-        return { name: 'NOP', cycles: 4 };
+        return { 
+            name: 'NOP', 
+            cycles: 4,
+            asm: 'NOP',
+            description: 'No operation',
+            pc: pc
+        };
     },
     
     op_rts() {
-        // FIXED: RTS should pull a word (16-bit), not long (32-bit)
-        // This matches the behavior of JSR which pushes a word
+        const pc = this.registers.pc - 2; // PC was already advanced
         const returnAddr = this.pullWord();
+        
+        // Debug logging
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RTS                    ; Return from subroutine`);
+        console.log(`       → Return address: 0x${returnAddr.toString(16).padStart(4, '0')}`);
+        
         this.registers.pc = returnAddr >>> 0;
         this.cycles += 16;
         
-        // Debug logging
-        console.log(`🔄 [CPU] RTS: Return to PC=0x${returnAddr.toString(16).padStart(4, '0')}`);
-        
         // Check if this is an exit condition (returning to low memory)
         if (returnAddr <= 0x10) {
-            console.log('🏁 [CPU] RTS to exit address - program finished');
+            console.log(`🏁 [EXEC] Program completed - RTS to exit address 0x${returnAddr.toString(16).padStart(4, '0')}`);
             this.running = false;
-            return { name: 'RTS', cycles: 16, finished: true };
+            return { 
+                name: 'RTS', 
+                cycles: 16, 
+                finished: true,
+                asm: 'RTS',
+                description: 'Return from subroutine (EXIT)',
+                pc: pc,
+                target: returnAddr
+            };
         }
         
-        return { name: 'RTS', cycles: 16 };
+        return { 
+            name: 'RTS', 
+            cycles: 16,
+            asm: 'RTS',
+            description: 'Return from subroutine',
+            pc: pc,
+            target: returnAddr
+        };
     },
     
     op_rte() {
+        const pc = this.registers.pc - 2;
+        
         if (!this.flag_s) {
+            console.log(`🔴 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RTE                    ; PRIVILEGE VIOLATION!`);
             this.exception_privilege_violation();
-            return { name: 'RTE', cycles: 4, exception: true };
+            return { 
+                name: 'RTE', 
+                cycles: 4, 
+                exception: true,
+                asm: 'RTE',
+                description: 'Return from exception (PRIVILEGE VIOLATION)',
+                pc: pc
+            };
         }
+        
+        const oldSR = this.registers.sr;
         this.registers.sr = this.pullWord();
         this.updateFlagsFromSR();
-        this.registers.pc = this.pullLong();
+        const returnAddr = this.pullLong();
+        this.registers.pc = returnAddr;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RTE                    ; Return from exception`);
+        console.log(`       → Old SR: 0x${oldSR.toString(16).padStart(4, '0')}, New SR: 0x${this.registers.sr.toString(16).padStart(4, '0')}`);
+        console.log(`       → Return address: 0x${returnAddr.toString(16).padStart(8, '0')}`);
+        
         this.cycles += 20;
-        return { name: 'RTE', cycles: 20 };
+        return { 
+            name: 'RTE', 
+            cycles: 20,
+            asm: 'RTE',
+            description: 'Return from exception',
+            pc: pc,
+            target: returnAddr
+        };
     },
     
     op_reset() {
+        const pc = this.registers.pc - 2;
+        
         if (!this.flag_s) {
+            console.log(`🔴 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RESET                  ; PRIVILEGE VIOLATION!`);
             this.exception_privilege_violation();
-            return { name: 'RESET', cycles: 4, exception: true };
+            return { 
+                name: 'RESET', 
+                cycles: 4, 
+                exception: true,
+                asm: 'RESET',
+                description: 'Reset external devices (PRIVILEGE VIOLATION)',
+                pc: pc
+            };
         }
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RESET                  ; Reset external devices`);
+        
         this.cycles += 132;
-        return { name: 'RESET', cycles: 132 };
+        return { 
+            name: 'RESET', 
+            cycles: 132,
+            asm: 'RESET',
+            description: 'Reset external devices',
+            pc: pc
+        };
     }
 };
 

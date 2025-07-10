@@ -395,7 +395,48 @@
                     const result = await response.json();
                     
                     if (result.success) {
-                        this.log(`Step: PC=0x${result.cpu.pc.toString(16)}`, 'info');
+                        const pc = result.cpu.pc;
+                        const instruction = result.cpu.instruction;
+                        const cycles = result.cpu.cycles;
+                        
+                        // Enhanced logging with assembler display
+                        if (result.cpu.asm) {
+                            // Display the assembler instruction
+                            this.log(`🔧 [ASM] 0x${pc.toString(16).padStart(8, '0')}: ${result.cpu.asm.padEnd(20)} ; ${result.cpu.description || 'Unknown'}`, 'success');
+                            
+                            // Display register changes if available
+                            if (result.cpu.oldValue !== undefined && result.cpu.newValue !== undefined) {
+                                this.log(`     → Value: 0x${result.cpu.oldValue.toString(16).padStart(8, '0')} → 0x${result.cpu.newValue.toString(16).padStart(8, '0')}`, 'info');
+                            }
+                            
+                            // Display target address for jumps/branches
+                            if (result.cpu.target !== undefined) {
+                                this.log(`     → Target: 0x${result.cpu.target.toString(16).padStart(8, '0')}`, 'info');
+                            }
+                            
+                            // Display immediate values
+                            if (result.cpu.immediate !== undefined) {
+                                this.log(`     → Immediate: 0x${result.cpu.immediate.toString(16).padStart(8, '0')} (${result.cpu.immediate})`, 'info');
+                            }
+                        } else {
+                            // Fallback for instructions without enhanced debug
+                            this.log(`🔧 [STEP] PC=0x${pc.toString(16).padStart(8, '0')}: ${instruction} (${cycles} cycles)`, 'info');
+                        }
+                        
+                        // Display CPU flags if they changed
+                        const flags = result.cpu.flags;
+                        if (flags) {
+                            const flagStr = [
+                                flags.zero ? 'Z' : '-',
+                                flags.negative ? 'N' : '-',
+                                flags.carry ? 'C' : '-',
+                                flags.overflow ? 'V' : '-',
+                                flags.extend ? 'X' : '-',
+                                flags.supervisor ? 'S' : '-'
+                            ].join('');
+                            this.log(`     → Flags: ${flagStr}`, 'info');
+                        }
+                        
                         this.updateDebugInfo(result);
                         this.updateDisplay(result.display);
                     } else {
@@ -406,8 +447,7 @@
                     this.log(`✗ Step error: ${error.message}`, 'error');
                     this.showStatus('Step failed', 'error');
                 }
-            }
-            
+            }            
             async reset() {
                 this.log('Resetting system...', 'info');
                 

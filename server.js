@@ -93,9 +93,27 @@ app.get('/step', (req, res) => {
         
         res.json({
             success: true,
-            cpu: result.cpu,
+            cpu: {
+                pc: result.cpu.pc,
+                registers: result.cpu.registers,
+                flags: result.cpu.flags,
+                stats: result.cpu.stats,
+                finished: result.cpu.finished,
+                error: result.cpu.error,
+                running: result.cpu.running,
+                instruction: result.cpu.instruction,
+                cycles: result.cpu.cycles,
+                // Enhanced debug information
+                asm: result.cpu.asm,
+                description: result.cpu.description,
+                oldValue: result.cpu.oldValue,
+                newValue: result.cpu.newValue,
+                target: result.cpu.target,
+                immediate: result.cpu.immediate
+            },
             memory: result.memory,
-            display: result.display
+            display: result.display,
+            message: result.message
         });
 
     } catch (error) {
