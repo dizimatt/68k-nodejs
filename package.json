@@ -1,0 +1,11 @@
+{
+  "name": "68k-nodejs",
+  "version": "1.0.0",
+  "description": "nodejs adaptation of m68kjs, which is designed to run a single executable file. ultimately amiga-blitter-based display is to be refected straight onto an html5-canvas element(via blitter-chip emulation)",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
