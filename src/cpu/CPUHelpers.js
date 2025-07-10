@@ -126,4 +126,11 @@ const CPUHelpers = {
     }
 };
 
+// Export static helper functions that can access 'this' properly
+CPUHelpers.fetchWord = function() {
+    const word = this.memory.readWord(this.registers.pc);
+    this.registers.pc = (this.registers.pc + 2) >>> 0;
+    return word;
+};
+
 module.exports = { CPUHelpers };

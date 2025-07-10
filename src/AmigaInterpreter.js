@@ -2,7 +2,7 @@
 
 const { HunkLoader } = require('./HunkLoader');
 const { MemoryManager } = require('./MemoryManager');
-const { SimpleCPU } = require('./SimpleCPU');
+const { MusashiInspiredCPU } = require('./MusashiInspiredCPU');
 const { BlitterChip } = require('./BlitterChip');
 const { CopperChip } = require('./CopperChip');
 const { VirtualCanvas } = require('./VirtualCanvas');
@@ -34,7 +34,7 @@ class AmigaInterpreter {
             this.memory.loadHunks(hunks);
             
             // Initialize CPU
-            this.cpu = new SimpleCPU(this.memory);
+            this.cpu = new MusashiInspiredCPU(this.memory);
             
             // Set program counter to first hunk
             if (hunks.length > 0) {

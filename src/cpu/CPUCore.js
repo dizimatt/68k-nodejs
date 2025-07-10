@@ -55,7 +55,7 @@ class CPUCore {
         }
         
         const pc = this.registers.pc;
-        const opcode = CPUHelpers.fetchWord(this);
+        const opcode = this.fetchWord(); // Use this.fetchWord() instead of CPUHelpers.fetchWord()
         
         const handler = this.opcodeTable[opcode];
         
@@ -63,7 +63,7 @@ class CPUCore {
             const result = handler();
             this.instructionCount++;
             this.updateStats(result.name);
-            CPUHelpers.updateSRFromFlags(this);
+            this.updateSRFromFlags(); // Use this.updateSRFromFlags() instead of CPUHelpers.updateSRFromFlags()
             
             return {
                 instruction: result.name,
