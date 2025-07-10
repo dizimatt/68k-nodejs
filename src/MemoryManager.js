@@ -1,3 +1,5 @@
+// UPDATED: src/MemoryManager.js - Add resetWorkingState method
+
 class MemoryManager {
     constructor() {
         this.chipRam = new Uint8Array(2 * 1024 * 1024); // 2MB chip RAM
@@ -13,6 +15,8 @@ class MemoryManager {
         for (const hunk of hunks) {
             this.writeBytes(hunk.loadAddress, hunk.data);
         }
+        
+        console.log(`📁 [MEMORY] Loaded ${hunks.length} hunks into memory`);
     }
     
     readByte(address) {
@@ -76,37 +80,56 @@ class MemoryManager {
         return Array.from(this.customRegisters.slice(0, 32));
     }
     
-    reset() {
+    // NEW METHOD: Reset working state but keep loaded hunks
+    resetWorkingState() {
+        console.log('🧹 [MEMORY] Resetting working state (preserving loaded hunks)...');
+        
+        // Clear all memory
         this.chipRam.fill(0);
         this.fastRam.fill(0);
         this.customRegisters.fill(0);
-        this.hunks = [];
+        
+        // DON'T clear hunks array - that's the key difference from reset()
+        // this.hunks = [];  ← DON'T do this!
+        
+        console.log(`✅ [MEMORY] Working state cleared, ${this.hunks.length} hunks preserved`);
     }
-    getUsageStats() {
-        let chipRamUsed = 0;
-        let fastRamUsed = 0;
+    
+    // EXISTING METHOD: Complete reset (clears everything including loaded executable)
+    reset() {
+        console.log('🧹 [MEMORY] Complete reset - clearing all data including loaded executable...');
         
-        // Count non-zero bytes (simple usage metric)
-        for (let i = 0; i < this.chipRam.length; i++) {
-            if (this.chipRam[i] !== 0) chipRamUsed++;
-        }
+        this.chipRam.fill(0);
+        this.fastRam.fill(0);
+        this.customRegisters.fill(0);
+        this.hunks = [];  // This clears the loaded executable
         
-        for (let i = 0; i < this.fastRam.length; i++) {
-            if (this.fastRam[i] !== 0) fastRamUsed++;
+        console.log('✅ [MEMORY] Complete reset finished');
+    }
+    
+    // OPTIONAL: Add method to check if executable is loaded
+    hasExecutableLoaded() {
+        return this.hunks.length > 0;
+    }
+    
+    // OPTIONAL: Get loaded executable info
+    getLoadedExecutableInfo() {
+        if (this.hunks.length === 0) {
+            return { loaded: false };
         }
         
         return {
-            chipRam: {
-                total: this.chipRam.length,
-                used: chipRamUsed,
-                percentage: ((chipRamUsed / this.chipRam.length) * 100).toFixed(2)
-            },
-            fastRam: {
-                total: this.fastRam.length,
-                used: fastRamUsed,
-                percentage: ((fastRamUsed / this.fastRam.length) * 100).toFixed(2)
-            }
+            loaded: true,
+            hunkCount: this.hunks.length,
+            totalSize: this.hunks.reduce((sum, hunk) => sum + hunk.data.length, 0),
+            entryPoint: this.hunks[0]?.loadAddress || 0,
+            hunks: this.hunks.map(hunk => ({
+                type: hunk.type,
+                address: hunk.loadAddress,
+                size: hunk.data.length
+            }))
         };
     }
 }
+
 module.exports = { MemoryManager };

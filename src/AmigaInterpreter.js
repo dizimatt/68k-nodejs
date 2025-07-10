@@ -1,4 +1,4 @@
-// UPDATED: src/AmigaInterpreter.js - Fix run loop to stop properly
+// UPDATED: src/AmigaInterpreter.js - Fix reset to keep executable loaded
 
 const { HunkLoader } = require('./HunkLoader');
 const { MemoryManager } = require('./MemoryManager');
@@ -19,6 +19,7 @@ class AmigaInterpreter {
         this.canvas = new VirtualCanvas();
         this.loaded = false;
         this.running = false;
+        this.loadedHunks = [];  // Store hunks separately so reset doesn't lose them
     }
 
     loadExecutable(buffer) {
@@ -26,10 +27,13 @@ class AmigaInterpreter {
             // Parse Amiga Hunk format
             const hunks = this.hunkLoader.loadHunks(buffer);
             
+            // Store hunks for reset functionality
+            this.loadedHunks = hunks;
+            
             // Set up memory
             this.memory.loadHunks(hunks);
             
-            // Initialize CPU (we'll use a simple CPU implementation for now)
+            // Initialize CPU
             this.cpu = new SimpleCPU(this.memory);
             
             // Set program counter to first hunk
@@ -38,6 +42,8 @@ class AmigaInterpreter {
             }
             
             this.loaded = true;
+            
+            console.log('📁 [INTERPRETER] Executable loaded and ready');
             
             return {
                 success: true,
@@ -61,15 +67,13 @@ class AmigaInterpreter {
             throw new Error('No executable loaded');
         }
 
-        // Don't reinitialize if already initialized - just reset execution state
+        // Check if CPU needs initialization
         if (!this.cpu.isInitialized()) {
-            console.log('🔧 [INTERPRETER] CPU not initialized, setting up...');
-            // Find the entry point from loaded hunks
-            const entryPoint = this.memory.hunks.length > 0 ? this.memory.hunks[0].loadAddress : 0x400000;
+            console.log('🔧 [INTERPRETER] CPU not initialized for run, initializing...');
+            const entryPoint = this.loadedHunks.length > 0 ? this.loadedHunks[0].loadAddress : 0x400000;
             this.cpu.initialize(entryPoint);
         } else {
-            console.log('🔄 [INTERPRETER] CPU already initialized, starting execution...');
-            // Just reset execution state, don't reinitialize stack
+            console.log('🔄 [INTERPRETER] CPU already initialized, resetting execution state...');
             this.cpu.resetExecution();
         }
 
@@ -124,20 +128,19 @@ class AmigaInterpreter {
             stats: finalStats
         };
     }
-
+    
     step() {
         if (!this.loaded) {
             throw new Error('No executable loaded');
         }
 
-        // IMPORTANT FIX: Check if CPU needs initialization before stepping
+        // Check if CPU needs initialization
         if (!this.cpu.isInitialized()) {
             console.log('🔧 [INTERPRETER] CPU not initialized for step, initializing...');
-            // Find the entry point from loaded hunks
-            const entryPoint = this.memory.hunks.length > 0 ? this.memory.hunks[0].loadAddress : 0x400000;
+            const entryPoint = this.loadedHunks.length > 0 ? this.loadedHunks[0].loadAddress : 0x400000;
             this.cpu.initialize(entryPoint);
         }
-        
+
         // Check if CPU can still execute
         if (!this.cpu.isRunning()) {
             console.log('🛑 [INTERPRETER] Cannot step - CPU execution already finished');
@@ -200,7 +203,7 @@ class AmigaInterpreter {
             cpu: this.cpu.getStatistics(),
             memory: {
                 chipRamUsed: this.memory.getUsageStats ? this.memory.getUsageStats() : 'N/A',
-                hunksLoaded: this.memory.hunks.length
+                hunksLoaded: this.loadedHunks.length  // Use stored hunks
             },
             execution: {
                 loaded: this.loaded,
@@ -211,18 +214,56 @@ class AmigaInterpreter {
         };
     }
 
+    // FIXED: Reset - keep executable loaded!
     reset() {
+        console.log('🔄 [INTERPRETER] Resetting system state (keeping executable loaded)...');
+        
         this.running = false;
+        
+        // Reset CPU state but DON'T destroy the CPU
         if (this.cpu) {
-            this.cpu.reset();  // This should completely reset CPU including initialization state
+            this.cpu.reset();  // This clears registers and marks as uninitialized
         }
-        this.memory.reset();
+        
+        // DON'T reset memory completely - just clear the working areas
+        // Keep the loaded hunks in memory
+        this.memory.resetWorkingState();  // We need to add this method
+        
+        // Reset custom chips
         this.customChips.blitter.reset();
         this.customChips.copper.reset();
         this.canvas.reset();
         
-        console.log('🔄 [INTERPRETER] System reset completed - CPU will be reinitialized on next run');
+        // IMPORTANT: Keep the loaded state and hunks
+        // this.loaded = false;     ← DON'T do this!
+        // this.loadedHunks = [];   ← DON'T do this!
+        
+        // But we need to reload the hunks into memory since memory was cleared
+        if (this.loadedHunks.length > 0) {
+            console.log('📁 [INTERPRETER] Reloading executable into memory...');
+            this.memory.loadHunks(this.loadedHunks);
+        }
+        
+        console.log('✅ [INTERPRETER] Reset complete - executable still loaded and ready to run');
+        console.log(`📊 [INTERPRETER] Status: loaded=${this.loaded}, hunks=${this.loadedHunks.length}`);
     }
 }
 
 module.exports = { AmigaInterpreter };
+
+// ALSO NEED TO UPDATE: src/MemoryManager.js - Add resetWorkingState method
+
+// ADD this method to MemoryManager class:
+/*
+resetWorkingState() {
+    // Clear chip RAM and fast RAM but DON'T clear the hunks array
+    this.chipRam.fill(0);
+    this.fastRam.fill(0);
+    this.customRegisters.fill(0);
+    
+    // DON'T clear this.hunks - that would lose the loaded executable
+    // this.hunks = [];  ← DON'T do this in resetWorkingState!
+    
+    console.log('🧹 [MEMORY] Working state cleared, hunks preserved');
+}
+*/
