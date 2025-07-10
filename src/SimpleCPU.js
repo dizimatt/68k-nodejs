@@ -1,13 +1,13 @@
-// FIXED: src/SimpleCPU.js - Corrected exit address handling
+// UPDATED: src/SimpleCPU.js - Full 32-bit addressing support
 
 class SimpleCPU {
     constructor(memory) {
         this.memory = memory;
         this.registers = {
-            d: new Array(8).fill(0),
-            a: new Array(8).fill(0),
-            pc: 0,
-            sr: 0
+            d: new Array(8).fill(0), // Data registers D0-D7 (32-bit)
+            a: new Array(8).fill(0), // Address registers A0-A7 (32-bit)
+            pc: 0,                   // Program counter (32-bit)
+            sr: 0                    // Status register (16-bit)
         };
         this.running = true;
         this.instructionStats = new Map();
@@ -16,49 +16,64 @@ class SimpleCPU {
         this.implementedCount = 0;
         this.unimplementedCount = 0;
         
-        // Stack management
+        // Stack management (all 32-bit addresses)
         this.stackBase = 0;
         this.stackTop = 0;
         this.initialSP = 0;
-        this.exitAddress = 0x12345678; // Use a distinctive 32-bit exit address
     }
     
-    // Initialize the CPU with proper stack setup
+    // Ensure all values are treated as 32-bit unsigned integers
+    to32BitAddress(value) {
+        return (value >>> 0); // Convert to unsigned 32-bit
+    }
+    
+    // Initialize the CPU with proper 32-bit stack setup
     initialize(programEntry, stackSize = 8192) {
-        console.log(`🔧 [CPU] Initializing CPU...`);
+        console.log(`🔧 [CPU] Initializing CPU with 32-bit addressing...`);
         
-        // Set up stack in chip RAM (at the end)
-        this.stackTop = 0x200000;
-        this.stackBase = this.stackTop - stackSize;
-        this.initialSP = this.stackTop - 16;
+        // All addresses are 32-bit
+        this.stackTop = this.to32BitAddress(0x00200000);           // End of 2MB chip RAM
+        this.stackBase = this.to32BitAddress(this.stackTop - stackSize); // Stack grows downward
+        this.initialSP = this.to32BitAddress(this.stackTop - 16);  // Leave some headroom
         
-        // Set stack pointer (A7)
+        // Set 32-bit stack pointer (A7)
         this.registers.a[7] = this.initialSP;
         
-        // Set program counter
-        this.registers.pc = programEntry;
+        // Set 32-bit program counter
+        this.registers.pc = this.to32BitAddress(programEntry);
         
-        // Push exit address onto stack (32-bit value stored as two 16-bit words)
-        this.pushLongToStack(this.exitAddress);
+        // Push a distinctive 32-bit exit address pattern onto stack
+        // We'll push it as two 16-bit words since that's how 68000 stack works
+        const exitAddressHigh = 0x0000;  // High word of exit address
+        const exitAddressLow = 0x0004;   // Low word - very low address, clearly invalid
         
-        console.log(`📍 [CPU] Program entry: 0x${programEntry.toString(16)}`);
-        console.log(`📚 [CPU] Stack area: 0x${this.stackBase.toString(16)} - 0x${this.stackTop.toString(16)} (${stackSize} bytes)`);
-        console.log(`📌 [CPU] Initial SP: 0x${this.registers.a[7].toString(16)}`);
-        console.log(`🚪 [CPU] Exit address: 0x${this.exitAddress.toString(16)} (pushed to stack as 32-bit)`);
+        this.pushWordToStack(exitAddressHigh);  // Push high word first
+        this.pushWordToStack(exitAddressLow);   // Push low word second
+        
+        console.log(`📍 [CPU] Program entry: 0x${this.registers.pc.toString(16).padStart(8, '0')}`);
+        console.log(`📚 [CPU] Stack area: 0x${this.stackBase.toString(16).padStart(8, '0')} - 0x${this.stackTop.toString(16).padStart(8, '0')} (${stackSize} bytes)`);
+        console.log(`📌 [CPU] Initial SP: 0x${this.registers.a[7].toString(16).padStart(8, '0')}`);
+        console.log(`🚪 [CPU] Exit pattern: 0x${exitAddressHigh.toString(16).padStart(4, '0')}${exitAddressLow.toString(16).padStart(4, '0')} (pushed as two words)`);
         
         this.running = true;
     }
     
     setProgramCounter(address) {
-        this.initialize(address);
+        this.initialize(this.to32BitAddress(address));
     }
     
     getProgramCounter() {
-        return this.registers.pc;
+        return this.to32BitAddress(this.registers.pc);
     }
     
     getRegisters() {
-        return { ...this.registers };
+        // Ensure all registers are returned as 32-bit values
+        return {
+            d: this.registers.d.map(reg => this.to32BitAddress(reg)),
+            a: this.registers.a.map(reg => this.to32BitAddress(reg)),
+            pc: this.to32BitAddress(this.registers.pc),
+            sr: this.registers.sr & 0xFFFF  // SR is 16-bit
+        };
     }
     
     getFlags() {
@@ -70,65 +85,92 @@ class SimpleCPU {
         };
     }
     
-    // 16-bit stack operations (for RTS/JSR)
-    pushToStack(value) {
+    // 16-bit stack operations (for compatibility with 68000 instruction set)
+    pushWordToStack(value) {
+        const word = value & 0xFFFF;  // Ensure 16-bit value
+        
         if (this.registers.a[7] <= this.stackBase + 2) {
-            console.error(`🚨 [CPU] Stack overflow! SP=0x${this.registers.a[7].toString(16)}`);
+            console.error(`🚨 [CPU] Stack overflow! SP=0x${this.registers.a[7].toString(16).padStart(8, '0')}`);
             this.running = false;
             return;
         }
         
-        this.registers.a[7] -= 2;
-        this.memory.writeWord(this.registers.a[7], value & 0xFFFF);
+        // Pre-decrement stack pointer (32-bit address arithmetic)
+        this.registers.a[7] = this.to32BitAddress(this.registers.a[7] - 2);
         
-        console.log(`📤 [STACK] Pushed word 0x${(value & 0xFFFF).toString(16)} to SP=0x${this.registers.a[7].toString(16)}`);
+        // Write 16-bit word to 32-bit address
+        this.memory.writeWord(this.registers.a[7], word);
+        
+        console.log(`📤 [STACK] Pushed word 0x${word.toString(16).padStart(4, '0')} to SP=0x${this.registers.a[7].toString(16).padStart(8, '0')}`);
     }
     
-    popFromStack() {
+    popWordFromStack() {
         if (this.registers.a[7] >= this.initialSP) {
-            console.error(`🚨 [CPU] Stack underflow! SP=0x${this.registers.a[7].toString(16)}`);
+            console.error(`🚨 [CPU] Stack underflow! SP=0x${this.registers.a[7].toString(16).padStart(8, '0')}`);
             this.running = false;
             return 0;
         }
         
-        const value = this.memory.readWord(this.registers.a[7]);
-        this.registers.a[7] += 2;
+        // Read 16-bit word from 32-bit address
+        const value = this.memory.readWord(this.registers.a[7]) & 0xFFFF;
         
-        console.log(`📥 [STACK] Popped word 0x${value.toString(16)} from SP=0x${(this.registers.a[7] - 2).toString(16)}`);
+        // Post-increment stack pointer (32-bit address arithmetic)
+        this.registers.a[7] = this.to32BitAddress(this.registers.a[7] + 2);
+        
+        console.log(`📥 [STACK] Popped word 0x${value.toString(16).padStart(4, '0')} from SP=0x${(this.registers.a[7] - 2).toString(16).padStart(8, '0')}`);
         
         return value;
     }
     
-    // 32-bit stack operations (for storing addresses)
+    // 32-bit stack operations (for long addresses and data)
     pushLongToStack(value) {
-        // Push high word first, then low word (68000 convention)
-        this.pushToStack((value >> 16) & 0xFFFF);  // High word
-        this.pushToStack(value & 0xFFFF);           // Low word
+        const longValue = this.to32BitAddress(value);
         
-        console.log(`📤 [STACK] Pushed long 0x${value.toString(16)} (as two words)`);
+        // Push high word first, then low word (big-endian)
+        this.pushWordToStack((longValue >>> 16) & 0xFFFF);  // High word
+        this.pushWordToStack(longValue & 0xFFFF);           // Low word
+        
+        console.log(`📤 [STACK] Pushed long 0x${longValue.toString(16).padStart(8, '0')} (as two words)`);
     }
     
     popLongFromStack() {
         // Pop low word first, then high word
-        const lowWord = this.popFromStack();
-        const highWord = this.popFromStack();
-        const value = (highWord << 16) | lowWord;
+        const lowWord = this.popWordFromStack();
+        const highWord = this.popWordFromStack();
+        const value = this.to32BitAddress((highWord << 16) | lowWord);
         
-        console.log(`📥 [STACK] Popped long 0x${value.toString(16)} (from two words)`);
+        console.log(`📥 [STACK] Popped long 0x${value.toString(16).padStart(8, '0')} (from two words)`);
         
         return value;
     }
     
-    // Get stack usage statistics
+    // Read 32-bit long word from memory
+    readLong(address) {
+        const addr = this.to32BitAddress(address);
+        const highWord = this.memory.readWord(addr);
+        const lowWord = this.memory.readWord(addr + 2);
+        return this.to32BitAddress((highWord << 16) | lowWord);
+    }
+    
+    // Write 32-bit long word to memory
+    writeLong(address, value) {
+        const addr = this.to32BitAddress(address);
+        const longValue = this.to32BitAddress(value);
+        
+        this.memory.writeWord(addr, (longValue >>> 16) & 0xFFFF);  // High word
+        this.memory.writeWord(addr + 2, longValue & 0xFFFF);       // Low word
+    }
+    
+    // Get stack usage statistics with 32-bit addresses
     getStackInfo() {
         const used = this.initialSP - this.registers.a[7];
         const available = this.registers.a[7] - this.stackBase;
         
         return {
-            currentSP: this.registers.a[7],
-            stackBase: this.stackBase,
-            stackTop: this.stackTop,
-            initialSP: this.initialSP,
+            currentSP: this.to32BitAddress(this.registers.a[7]),
+            stackBase: this.to32BitAddress(this.stackBase),
+            stackTop: this.to32BitAddress(this.stackTop),
+            initialSP: this.to32BitAddress(this.initialSP),
             bytesUsed: used,
             bytesAvailable: available,
             percentUsed: ((used / (this.stackTop - this.stackBase)) * 100).toFixed(1)
@@ -140,11 +182,25 @@ class SimpleCPU {
         if (opcode === 0x4E71) return "NOP";
         if (opcode === 0x4E75) return "RTS";
         
-        if ((opcode & 0xFFC0) === 0x4E80) return "JSR (absolute)";
+        // JSR variants with different addressing modes
+        if ((opcode & 0xFFC0) === 0x4E80) return "JSR (absolute.W)";
+        if ((opcode & 0xFFC0) === 0x4E90) return "JSR (An)";
+        if ((opcode & 0xFFC0) === 0x4EA8) return "JSR (d16,An)";
+        if ((opcode & 0xFFC0) === 0x4EB0) return "JSR (d8,An,Xn)";
+        if ((opcode & 0xFFC0) === 0x4EB8) return "JSR (absolute.W)";
+        if ((opcode & 0xFFC0) === 0x4EB9) return "JSR (absolute.L)";
+        
+        // JMP variants
         if ((opcode & 0xFFC0) === 0x4EC0) return "JMP (absolute)";
         
+        // LEA (Load Effective Address) - 32-bit address calculations
+        if ((opcode & 0xF1C0) === 0x41C0) return "LEA";
+        
+        // MOVE.L variants - 32-bit data moves
+        if ((opcode & 0xF000) === 0x2000) return "MOVE.L";
+        
+        // Other instruction families
         if ((opcode & 0xF000) === 0x1000) return "MOVE.B";
-        if ((opcode & 0xF000) === 0x2000) return "MOVE.L";  
         if ((opcode & 0xF000) === 0x3000) return "MOVE.W";
         if ((opcode & 0xF000) === 0x4000) return "Misc/LEA/JSR/CLR";
         if ((opcode & 0xF000) === 0x5000) return "ADDQ/SUBQ/DBcc";
@@ -167,79 +223,103 @@ class SimpleCPU {
             return { instruction: 'STOPPED', cycles: 0, finished: true };
         }
         
+        // Ensure PC is 32-bit
+        this.registers.pc = this.to32BitAddress(this.registers.pc);
+        
         const instruction = this.memory.readWord(this.registers.pc);
         const oldPC = this.registers.pc;
-        this.registers.pc += 2;
+        
+        // Advance PC by 2 (32-bit address arithmetic)
+        this.registers.pc = this.to32BitAddress(this.registers.pc + 2);
         
         const instrType = this.getInstructionInfo(instruction);
         this.updateStats(instruction, instrType);
         
         // ✅ IMPLEMENTED INSTRUCTIONS
         if (instruction === 0x4E75) { // RTS
-            console.log(`🟢 [IMPLEMENTED] RTS at PC=0x${oldPC.toString(16)} - Return from subroutine`);
+            console.log(`🟢 [IMPLEMENTED] RTS at PC=0x${oldPC.toString(16).padStart(8, '0')} - Return from subroutine`);
             this.implementedCount++;
             
-            // RTS only pops 16 bits (program counter), not 32 bits
-            const returnAddress = this.popFromStack();
+            // RTS pops 16-bit return address (68000 behavior)
+            const returnAddress = this.popWordFromStack();
             
-            console.log(`🔍 [DEBUG] RTS return address: 0x${returnAddress.toString(16)}`);
+            console.log(`🔍 [DEBUG] RTS return address: 0x${returnAddress.toString(16).padStart(4, '0')}`);
             
-            // Check if this is our special exit pattern
-            // Since we pushed 32-bit address but RTS only pops 16-bit,
-            // we need a different approach
-            
-            // Simple solution: Check if we're returning to an address outside our program
-            if (returnAddress < 0x400000 || returnAddress > 0x500000) {
-                console.log(`🏁 [CPU] Program completed - RTS to invalid address 0x${returnAddress.toString(16)}`);
+            // Check if this is our exit pattern (very low address)
+            if (returnAddress <= 0x000F) {
+                console.log(`🏁 [CPU] Program completed - RTS to exit address 0x${returnAddress.toString(16).padStart(4, '0')}`);
                 this.running = false;
                 return { instruction: 'RTS', cycles: 16, finished: true };
             }
             
-            // Normal subroutine return
-            this.registers.pc = returnAddress;
-            console.log(`↩️  [CPU] Returned to PC=0x${returnAddress.toString(16)}`);
+            // Normal subroutine return - extend to 32-bit address
+            this.registers.pc = this.to32BitAddress(returnAddress);
+            console.log(`↩️  [CPU] Returned to PC=0x${this.registers.pc.toString(16).padStart(8, '0')}`);
             
             return { instruction: 'RTS', cycles: 16 };
         }
         
         if (instruction === 0x4E71) { // NOP
-            console.log(`🟢 [IMPLEMENTED] NOP at PC=0x${oldPC.toString(16)} - No operation`);
+            console.log(`🟢 [IMPLEMENTED] NOP at PC=0x${oldPC.toString(16).padStart(8, '0')} - No operation`);
             this.implementedCount++;
             return { instruction: 'NOP', cycles: 4 };
         }
         
-        // 🚧 PARTIALLY IMPLEMENTED - JSR (Jump to Subroutine)
-        if ((instruction & 0xFFC0) === 0x4E80) { // JSR absolute word
+        // 🚧 PARTIALLY IMPLEMENTED - JSR (Jump to Subroutine) with 32-bit addressing
+        if ((opcode & 0xFFC0) === 0x4E80) { // JSR absolute.W
             const target = this.memory.readWord(this.registers.pc);
-            this.registers.pc += 2;
+            this.registers.pc = this.to32BitAddress(this.registers.pc + 2);
             
-            console.log(`🟡 [PARTIAL] JSR 0x${target.toString(16)} at PC=0x${oldPC.toString(16)} - Jump to subroutine`);
+            console.log(`🟡 [PARTIAL] JSR 0x${target.toString(16).padStart(4, '0')} at PC=0x${oldPC.toString(16).padStart(8, '0')} - Jump to subroutine`);
             
-            // Push return address to stack (16-bit, as RTS expects)
-            this.pushToStack(this.registers.pc);
+            // Push return address to stack (16-bit for compatibility)
+            this.pushWordToStack(this.registers.pc & 0xFFFF);
             
-            // Jump to target
-            this.registers.pc = target;
+            // Jump to target (extend to 32-bit address)
+            this.registers.pc = this.to32BitAddress(target);
             
             this.implementedCount++;
             return { instruction: 'JSR', cycles: 18 };
         }
         
+        // 🚧 PARTIALLY IMPLEMENTED - JSR absolute.L (32-bit target)
+        if ((opcode & 0xFFC0) === 0x4EB9) { // JSR absolute.L
+            const target = this.readLong(this.registers.pc);
+            this.registers.pc = this.to32BitAddress(this.registers.pc + 4);
+            
+            console.log(`🟡 [PARTIAL] JSR.L 0x${target.toString(16).padStart(8, '0')} at PC=0x${oldPC.toString(16).padStart(8, '0')} - Jump to 32-bit address`);
+            
+            // Push return address to stack
+            this.pushWordToStack(this.registers.pc & 0xFFFF);
+            
+            // Jump to 32-bit target
+            this.registers.pc = target;
+            
+            this.implementedCount++;
+            return { instruction: 'JSR.L', cycles: 20 };
+        }
+        
         // ❌ UNIMPLEMENTED INSTRUCTIONS
         if ((instruction & 0xF000) === 0x3000) { // MOVE.W
-            console.log(`🔴 [UNIMPLEMENTED] MOVE.W at PC=0x${oldPC.toString(16)} - opcode: 0x${instruction.toString(16)}`);
+            console.log(`🔴 [UNIMPLEMENTED] MOVE.W at PC=0x${oldPC.toString(16).padStart(8, '0')} - opcode: 0x${instruction.toString(16).padStart(4, '0')}`);
             this.unimplementedCount++;
             return { instruction: 'MOVE.W', cycles: 8 };
         }
         
+        if ((instruction & 0xF000) === 0x2000) { // MOVE.L
+            console.log(`🔴 [UNIMPLEMENTED] MOVE.L at PC=0x${oldPC.toString(16).padStart(8, '0')} - opcode: 0x${instruction.toString(16).padStart(4, '0')}`);
+            this.unimplementedCount++;
+            return { instruction: 'MOVE.L', cycles: 12 };
+        }
+        
         // Check for execution errors
         if (instruction === 0x0000) {
-            console.log(`🚨 [CPU] Executing zero opcode at PC=0x${oldPC.toString(16)} - possible execution error`);
+            console.log(`🚨 [CPU] Executing zero opcode at PC=0x${oldPC.toString(16).padStart(8, '0')} - possible execution error`);
             
             if (!this.zeroOpcodeCount) this.zeroOpcodeCount = 0;
             this.zeroOpcodeCount++;
             
-            if (this.zeroOpcodeCount > 3) { // Reduced threshold
+            if (this.zeroOpcodeCount > 3) {
                 console.log(`🚨 [CPU] Too many zero opcodes - stopping execution`);
                 this.running = false;
                 return { instruction: 'ZERO_OPCODE', cycles: 4, error: true };
@@ -248,7 +328,7 @@ class SimpleCPU {
             this.zeroOpcodeCount = 0;
         }
         
-        console.log(`🔴 [UNIMPLEMENTED] Unknown opcode: 0x${instruction.toString(16).toUpperCase()} (${instrType}) at PC=0x${oldPC.toString(16)}`);
+        console.log(`🔴 [UNIMPLEMENTED] Unknown opcode: 0x${instruction.toString(16).padStart(4, '0').toUpperCase()} (${instrType}) at PC=0x${oldPC.toString(16).padStart(8, '0')}`);
         this.unimplementedCount++;
         
         return { instruction: `UNK_${instruction.toString(16)}`, cycles: 4 };
@@ -259,7 +339,7 @@ class SimpleCPU {
         this.instructionStats.set(instrType, (this.instructionStats.get(instrType) || 0) + 1);
         
         if (instrType === "Unknown") {
-            const opcodeHex = `0x${instruction.toString(16).toUpperCase()}`;
+            const opcodeHex = `0x${instruction.toString(16).padStart(4, '0').toUpperCase()}`;
             this.unknownInstructions.set(opcodeHex, (this.unknownInstructions.get(opcodeHex) || 0) + 1);
         }
         
@@ -276,7 +356,7 @@ class SimpleCPU {
         console.log(`\n📊 === PROGRESS REPORT (${this.totalInstructions} instructions) ===`);
         console.log(`🟢 IMPLEMENTED: ${this.implementedCount} (${implementedPercent}%)`);
         console.log(`🔴 UNIMPLEMENTED: ${this.unimplementedCount} (${unimplementedPercent}%)`);
-        console.log(`📚 STACK: SP=0x${stackInfo.currentSP.toString(16)}, used=${stackInfo.bytesUsed} bytes (${stackInfo.percentUsed}%)`);
+        console.log(`📚 STACK: SP=0x${stackInfo.currentSP.toString(16).padStart(8, '0')}, used=${stackInfo.bytesUsed} bytes (${stackInfo.percentUsed}%)`);
         
         if (this.unknownInstructions.size > 0) {
             console.log(`🎯 TOP OPCODES TO IMPLEMENT:`);
@@ -327,9 +407,8 @@ class SimpleCPU {
         this.stackBase = 0;
         this.stackTop = 0;
         this.initialSP = 0;
-        this.exitAddress = 0;
         
-        console.log("🔄 [CPU] Reset - all statistics and stack cleared");
+        console.log("🔄 [CPU] Reset - all statistics and 32-bit addressing cleared");
     }
 }
 
