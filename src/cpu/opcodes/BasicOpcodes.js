@@ -1,4 +1,4 @@
-// src/cpu/opcodes/BasicOpcodes.js - Basic CPU Operations
+// src/cpu/opcodes/BasicOpcodes.js - Basic CPU Operations (FIXED)
 
 const BasicOpcodes = {
     setup(opcodeTable, cpu) {
@@ -26,9 +26,22 @@ const BasicOpcodes = {
     },
     
     op_rts() {
-        const returnAddr = this.pullLong();
+        // FIXED: RTS should pull a word (16-bit), not long (32-bit)
+        // This matches the behavior of JSR which pushes a word
+        const returnAddr = this.pullWord();
         this.registers.pc = returnAddr >>> 0;
         this.cycles += 16;
+        
+        // Debug logging
+        console.log(`🔄 [CPU] RTS: Return to PC=0x${returnAddr.toString(16).padStart(4, '0')}`);
+        
+        // Check if this is an exit condition (returning to low memory)
+        if (returnAddr <= 0x10) {
+            console.log('🏁 [CPU] RTS to exit address - program finished');
+            this.running = false;
+            return { name: 'RTS', cycles: 16, finished: true };
+        }
+        
         return { name: 'RTS', cycles: 16 };
     },
     
