@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amiga Executable Runner</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #ff6600;
+            text-shadow: 2px 2px 4px rgba(255, 102, 0, 0.3);
+        }
+        
+        .panel {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .upload-area {
+            border: 2px dashed #666;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            border-color: #ff6600;
+            background: rgba(255, 102, 0, 0.1);
+        }
+        
+        .upload-area.dragover {
+            border-color: #ff6600;
+            background: rgba(255, 102, 0, 0.2);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        button {
+            background: #ff6600;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #ff8833;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .status.success {
+            background: rgba(0, 255, 0, 0.2);
+            border: 1px solid #00ff00;
+        }
+        
+        .status.error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid #ff0000;
+        }
+        
+        .status.info {
+            background: rgba(0, 100, 255, 0.2);
+            border: 1px solid #0066ff;
+        }
+        
+        .debug-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .debug-section {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        
+        .debug-section h3 {
+            color: #ff6600;
+            margin-top: 0;
+        }
+        
+        .register-display {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .memory-display {
+            font-size: 10px;
+            line-height: 1.2;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .canvas-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        #display-canvas {
+            border: 2px solid #333;
+            background: #000;
+            image-rendering: pixelated;
+            width: 640px;
+            height: 512px;
+        }
+        
+        .log-container {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+        }
+        
+        .log-entry.error {
+            color: #ff4444;
+        }
+        
+        .log-entry.info {
+            color: #4444ff;
+        }
+        
+        .log-entry.success {
+            color: #44ff44;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖥️ Amiga Executable Runner</h1>
+        
+        <div class="panel">
+            <h2>Upload Amiga Executable</h2>
+            <div class="upload-area" id="uploadArea">
+                <div>
+                    <strong>Drop an Amiga executable here</strong><br>
+                    or click to select a file
+                </div>
+                <input type="file" id="fileInput" accept=".exe,.bin,*">
+            </div>
+            <div id="fileInfo"></div>
+        </div>
+        
+        <div class="panel">
+            <h2>Controls</h2>
+            <div class="controls">
+                <button id="runBtn" disabled>Run</button>
+                <button id="stepBtn" disabled>Step</button>
+                <button id="resetBtn" disabled>Reset</button>
+                <button id="loadSampleBtn">Load Sample</button>
+            </div>
+            <div id="statusDisplay"></div>
+        </div>
+        
+        <div class="panel">
+            <h2>Display</h2>
+            <div class="canvas-container">
+                <canvas id="display-canvas" width="320" height="256"></canvas>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Debug Information</h2>
+            <div class="debug-panel">
+                <div class="debug-section">
+                    <h3>CPU State</h3>
+                    <div id="cpuState" class="register-display">
+                        No executable loaded
+                    </div>
+                </div>
+                
+                <div class="debug-section">
+                    <h3>Memory</h3>
+                    <div id="memoryState" class="memory-display">
+                        No executable loaded
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Log</h2>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry info">Amiga Executable Runner initialized</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AmigaRunner {
+            constructor() {
+                this.setupEventListeners();
+                this.canvas = document.getElementById('display-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.imageData = this.ctx.createImageData(320, 256);
+                this.log('System ready');
+            }
+            
+            setupEventListeners() {
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+                
+                // File upload
+                uploadArea.addEventListener('click', () => fileInput.click());
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.uploadFile(files[0]);
+                    }
+                });
+                
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.uploadFile(e.target.files[0]);
+                    }
+                });
+                
+                // Control buttons
+                document.getElementById('runBtn').addEventListener('click', () => this.run());
+                document.getElementById('stepBtn').addEventListener('click', () => this.step());
+                document.getElementById('resetBtn').addEventListener('click', () => this.reset());
+                document.getElementById('loadSampleBtn').addEventListener('click', () => this.loadSample());
+            }
+            
+            async uploadFile(file) {
+                this.log(`Uploading: ${file.name} (${file.size} bytes)`, 'info');
+                
+                const formData = new FormData();
+                formData.append('executable', file);
+                
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✓ Executable loaded: ${result.info.hunks} hunks, ${result.info.totalSize} bytes`, 'success');
+                        this.showStatus(result.message, 'success');
+                        this.updateFileInfo(result.info);
+                        this.enableControls();
+                    } else {
+                        this.log(`✗ Load failed: ${result.error}`, 'error');
+                        this.showStatus(result.error, 'error');
+                    }
+                } catch (error) {
+                    this.log(`✗ Upload error: ${error.message}`, 'error');
+                    this.showStatus('Upload failed', 'error');
+                }
+            }
+            
+            async run() {
+                this.log('Starting execution...', 'info');
+                
+                try {
+                    const response = await fetch('/run', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✓ Execution completed: ${result.state.steps} steps`, 'success');
+                        this.showStatus(`Executed ${result.state.steps} instructions`, 'success');
+                        this.updateDebugInfo();
+                    } else {
+                        this.log(`✗ Execution failed: ${result.error}`, 'error');
+                        this.showStatus(result.error, 'error');
+                    }
+                } catch (error) {
+                    this.log(`✗ Run error: ${error.message}`, 'error');
+                    this.showStatus('Execution failed', 'error');
+                }
+            }
+            
+            async step() {
+                try {
+                    const response = await fetch('/step');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`Step: PC=0x${result.cpu.pc.toString(16)}`, 'info');
+                        this.updateDebugInfo(result);
+                        this.updateDisplay(result.display);
+                    } else {
+                        this.log(`✗ Step failed: ${result.error}`, 'error');
+                        this.showStatus(result.error, 'error');
+                    }
+                } catch (error) {
+                    this.log(`✗ Step error: ${error.message}`, 'error');
+                    this.showStatus('Step failed', 'error');
+                }
+            }
+            
+            async reset() {
+                this.log('Resetting system...', 'info');
+                
+                try {
+                    const response = await fetch('/reset');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('✓ System reset', 'success');
+                        this.showStatus('System reset', 'success');
+                        this.clearDebugInfo();
+                        this.clearDisplay();
+                    } else {
+                        this.log(`✗ Reset failed: ${result.error}`, 'error');
+                        this.showStatus(result.error, 'error');
+                    }
+                } catch (error) {
+                    this.log(`✗ Reset error: ${error.message}`, 'error');
+                    this.showStatus('Reset failed', 'error');
+                }
+            }
+            
+            loadSample() {
+                this.log('Loading sample executable...', 'info');
+                
+                // Create a minimal Amiga executable for testing
+                const sampleData = this.createSampleExecutable();
+                const blob = new Blob([sampleData], { type: 'application/octet-stream' });
+                const file = new File([blob], 'sample.exe', { type: 'application/octet-stream' });
+                
+                this.uploadFile(file);
+            }
+            
+            createSampleExecutable() {
+                // Create a minimal Amiga Hunk format executable
+                const buffer = new ArrayBuffer(64);
+                const view = new DataView(buffer);
+                let offset = 0;
+                
+                // Magic number
+                view.setUint32(offset, 0x000003F3, false);
+                offset += 4;
+                
+                // Library count (0)
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                
+                // Hunk count (1)
+                view.setUint32(offset, 1, false);
+                offset += 4;
+                
+                // First hunk (0)
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                
+                // Last hunk (0)
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                
+                // Hunk size (4 longwords)
+                view.setUint32(offset, 4, false);
+                offset += 4;
+                
+                // HUNK_CODE
+                view.setUint32(offset, 0x3E9, false);
+                offset += 4;
+                
+                // Code size (4 longwords)
+                view.setUint32(offset, 4, false);
+                offset += 4;
+                
+                // Sample code: NOP, NOP, NOP, RTS
+                view.setUint16(offset, 0x4E71, false); // NOP
+                offset += 2;
+                view.setUint16(offset, 0x4E71, false); // NOP
+                offset += 2;
+                view.setUint16(offset, 0x4E71, false); // NOP
+                offset += 2;
+                view.setUint16(offset, 0x4E75, false); // RTS
+                offset += 2;
+                
+                // Padding
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                view.setUint32(offset, 0, false);
+                offset += 4;
+                
+                // HUNK_END
+                view.setUint32(offset, 0x3F2, false);
+                
+                return new Uint8Array(buffer);
+            }
+            
+            updateFileInfo(info) {
+                const fileInfo = document.getElementById('fileInfo');
+                fileInfo.innerHTML = `
+                    <div class="status success">
+                        <strong>File loaded successfully:</strong><br>
+                        Hunks: ${info.hunks}<br>
+                        Total Size: ${info.totalSize} bytes<br>
+                        Entry Point: 0x${info.entryPoint.toString(16)}
+                    </div>
+                `;
+            }
+            
+            updateDebugInfo(result) {
+                if (!result) return;
+                
+                const cpuState = document.getElementById('cpuState');
+                const memoryState = document.getElementById('memoryState');
+                
+                // Update CPU state
+                cpuState.innerHTML = `
+                    <strong>Program Counter:</strong> 0x${result.cpu.pc.toString(16).padStart(8, '0')}<br>
+                    <strong>Status Register:</strong> 0x${result.cpu.flags ? '----' : '----'}<br>
+                    <strong>Data Registers:</strong><br>
+                    ${result.cpu.registers.d ? result.cpu.registers.d.map((reg, i) => 
+                        `D${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}<br>
+                    <strong>Address Registers:</strong><br>
+                    ${result.cpu.registers.a ? result.cpu.registers.a.map((reg, i) => 
+                        `A${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}
+                `;
+                
+                // Update memory state
+                if (result.memory && result.memory.chipRam) {
+                    let memoryHtml = '<strong>Chip RAM (first 256 bytes):</strong><br>';
+                    for (let i = 0; i < Math.min(256, result.memory.chipRam.length); i += 16) {
+                        const address = i.toString(16).padStart(6, '0');
+                        const bytes = result.memory.chipRam.slice(i, i + 16)
+                            .map(b => b.toString(16).padStart(2, '0'))
+                            .join(' ');
+                        memoryHtml += `${address}: ${bytes}<br>`;
+                    }
+                    memoryState.innerHTML = memoryHtml;
+                } else {
+                    memoryState.innerHTML = 'No memory data available';
+                }
+            }
+            
+            updateDisplay(displayData) {
+                if (!displayData || !displayData.pixels) return;
+                
+                // Simple visualization - just show pixel data as grayscale
+                const pixels = displayData.pixels;
+                for (let i = 0; i < pixels.length && i < this.imageData.data.length / 4; i++) {
+                    const value = pixels[i] * 255;
+                    const index = i * 4;
+                    this.imageData.data[index] = value;     // R
+                    this.imageData.data[index + 1] = value; // G
+                    this.imageData.data[index + 2] = value; // B
+                    this.imageData.data[index + 3] = 255;   // A
+                }
+                
+                this.ctx.putImageData(this.imageData, 0, 0);
+            }
+            
+            clearDebugInfo() {
+                document.getElementById('cpuState').innerHTML = 'No executable loaded';
+                document.getElementById('memoryState').innerHTML = 'No executable loaded';
+            }
+            
+            clearDisplay() {
+                this.ctx.fillStyle = '#000';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+            
+            enableControls() {
+                document.getElementById('runBtn').disabled = false;
+                document.getElementById('stepBtn').disabled = false;
+                document.getElementById('resetBtn').disabled = false;
+            }
+            
+            showStatus(message, type) {
+                const statusDisplay = document.getElementById('statusDisplay');
+                statusDisplay.innerHTML = `<div class="status ${type}">${message}</div>`;
+            }
+            
+            log(message, type = 'info') {
+                const logContainer = document.getElementById('logContainer');
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // Keep only last 100 entries
+                while (logContainer.children.length > 100) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+        }
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new AmigaRunner();
+        });
+    </script>
+</body>
+</html>
