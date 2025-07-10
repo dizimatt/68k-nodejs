@@ -187,6 +187,14 @@ class HunkLoader {
         
         console.log(`Loaded ${hunkName} hunk: ${hunkData.length} bytes at 0x${loadAddress.toString(16)}`);
         
+        if (hunkName === 'CODE' && hunkData.length <= 16) {
+            // This looks like our sample executable
+            this.debugSampleInstructions({
+                data: hunkData,
+                loadAddress: loadAddress
+            });
+        }
+
         return {
             type: hunkName,
             data: hunkData,
@@ -206,6 +214,26 @@ class HunkLoader {
         }
         
         return bytes.join(' ');
+    }
+    debugSampleInstructions(hunk) {
+        console.log('\n🔍 DEBUGGING SAMPLE INSTRUCTIONS:');
+        console.log(`Hunk data length: ${hunk.data.length} bytes`);
+        console.log(`Load address: 0x${hunk.loadAddress.toString(16)}`);
+        
+        // Show each instruction
+        for (let i = 0; i < hunk.data.length; i += 2) {
+            if (i + 1 < hunk.data.length) {
+                const instruction = (hunk.data[i] << 8) | hunk.data[i + 1];
+                const address = hunk.loadAddress + i;
+                
+                let instructionName = 'UNKNOWN';
+                if (instruction === 0x4E71) instructionName = 'NOP';
+                if (instruction === 0x4E75) instructionName = 'RTS';
+                
+                console.log(`  Address 0x${address.toString(16)}: 0x${instruction.toString(16).padStart(4, '0')} (${instructionName})`);
+            }
+        }
+        console.log('🔍 END DEBUG\n');
     }
 }
 

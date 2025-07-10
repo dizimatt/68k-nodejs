@@ -391,69 +391,99 @@
             }
             
             createSampleExecutable() {
+                console.log('🔧 Creating sample executable...');
+                
                 // Create a minimal Amiga Hunk format executable
                 const buffer = new ArrayBuffer(64);
                 const view = new DataView(buffer);
                 let offset = 0;
                 
                 // Magic number
+                console.log(`Setting magic number at offset ${offset}`);
                 view.setUint32(offset, 0x000003F3, false);
                 offset += 4;
                 
                 // Library count (0)
+                console.log(`Setting library count at offset ${offset}`);
                 view.setUint32(offset, 0, false);
                 offset += 4;
                 
                 // Hunk count (1)
+                console.log(`Setting hunk count at offset ${offset}`);
                 view.setUint32(offset, 1, false);
                 offset += 4;
                 
                 // First hunk (0)
+                console.log(`Setting first hunk at offset ${offset}`);
                 view.setUint32(offset, 0, false);
                 offset += 4;
                 
                 // Last hunk (0)
+                console.log(`Setting last hunk at offset ${offset}`);
                 view.setUint32(offset, 0, false);
                 offset += 4;
                 
-                // Hunk size (4 longwords)
-                view.setUint32(offset, 4, false);
+                // Hunk size (2 longwords for just the code)
+                console.log(`Setting hunk size at offset ${offset}`);
+                view.setUint32(offset, 2, false);  // Changed to 2 longwords (8 bytes)
                 offset += 4;
                 
                 // HUNK_CODE
+                console.log(`Setting HUNK_CODE marker at offset ${offset}`);
                 view.setUint32(offset, 0x3E9, false);
                 offset += 4;
                 
-                // Code size (4 longwords)
-                view.setUint32(offset, 4, false);
+                // Code size (2 longwords = 8 bytes)
+                console.log(`Setting code size at offset ${offset}`);
+                view.setUint32(offset, 2, false);  // 2 longwords
                 offset += 4;
                 
-                // Sample code: NOP, NOP, NOP, RTS
+                // Sample code: Only implemented opcodes
+                console.log(`Setting NOP instruction at offset ${offset}`);
                 view.setUint16(offset, 0x4E71, false); // NOP
                 offset += 2;
+                
+                console.log(`Setting NOP instruction at offset ${offset}`);
                 view.setUint16(offset, 0x4E71, false); // NOP
                 offset += 2;
+                
+                console.log(`Setting NOP instruction at offset ${offset}`);
                 view.setUint16(offset, 0x4E71, false); // NOP
                 offset += 2;
+                
+                console.log(`Setting RTS instruction at offset ${offset}`);
                 view.setUint16(offset, 0x4E75, false); // RTS
                 offset += 2;
                 
-                // Padding
-                view.setUint32(offset, 0, false);
-                offset += 4;
-                view.setUint32(offset, 0, false);
-                offset += 4;
-                view.setUint32(offset, 0, false);
-                offset += 4;
-                view.setUint32(offset, 0, false);
-                offset += 4;
-                
-                // HUNK_END
+                // HUNK_END (no padding needed now)
+                console.log(`Setting HUNK_END marker at offset ${offset}`);
                 view.setUint32(offset, 0x3F2, false);
+                offset += 4;
                 
-                return new Uint8Array(buffer);
-            }
-            
+                // Create the final buffer with exact size needed
+                const finalBuffer = new ArrayBuffer(offset);
+                const finalView = new Uint8Array(finalBuffer);
+                const sourceView = new Uint8Array(buffer, 0, offset);
+                finalView.set(sourceView);
+                
+                console.log(`✅ Sample executable created: ${offset} bytes`);
+                
+                // Debug: Log the exact bytes
+                console.log('📋 Sample executable hex dump:');
+                const hexDump = Array.from(finalView)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join(' ');
+                console.log(hexDump);
+                
+                // Debug: Show what instructions should be at what addresses
+                console.log('📍 Expected instructions:');
+                console.log('  0x400000: 0x4E71 (NOP)');
+                console.log('  0x400002: 0x4E71 (NOP)');
+                console.log('  0x400004: 0x4E71 (NOP)');
+                console.log('  0x400006: 0x4E75 (RTS)');
+                
+                return new Uint8Array(finalBuffer);
+            }            
             updateFileInfo(info) {
                 const fileInfo = document.getElementById('fileInfo');
                 fileInfo.innerHTML = `
