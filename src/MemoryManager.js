@@ -82,5 +82,31 @@ class MemoryManager {
         this.customRegisters.fill(0);
         this.hunks = [];
     }
+    getUsageStats() {
+        let chipRamUsed = 0;
+        let fastRamUsed = 0;
+        
+        // Count non-zero bytes (simple usage metric)
+        for (let i = 0; i < this.chipRam.length; i++) {
+            if (this.chipRam[i] !== 0) chipRamUsed++;
+        }
+        
+        for (let i = 0; i < this.fastRam.length; i++) {
+            if (this.fastRam[i] !== 0) fastRamUsed++;
+        }
+        
+        return {
+            chipRam: {
+                total: this.chipRam.length,
+                used: chipRamUsed,
+                percentage: ((chipRamUsed / this.chipRam.length) * 100).toFixed(2)
+            },
+            fastRam: {
+                total: this.fastRam.length,
+                used: fastRamUsed,
+                percentage: ((fastRamUsed / this.fastRam.length) * 100).toFixed(2)
+            }
+        };
+    }
 }
 module.exports = { MemoryManager };

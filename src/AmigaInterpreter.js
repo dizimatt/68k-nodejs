@@ -96,13 +96,28 @@ class AmigaInterpreter {
             cpu: {
                 pc: this.cpu.getProgramCounter(),
                 registers: this.cpu.getRegisters(),
-                flags: this.cpu.getFlags()
+                flags: this.cpu.getFlags(),
+                stats: this.cpu.getStatistics() // Add CPU statistics
             },
             memory: {
                 chipRam: this.memory.getChipRamSample(),
                 customRegs: this.memory.getCustomRegisters()
             },
             display: this.canvas.getPixelData()
+        };
+    }
+    
+    getDetailedStats() {
+        if (!this.cpu) {
+            return { error: 'No CPU loaded' };
+        }
+        
+        return {
+            cpu: this.cpu.getStatistics(),
+            memory: {
+                chipRamUsed: this.memory.getUsageStats(),
+                hunksLoaded: this.memory.hunks.length
+            }
         };
     }
 

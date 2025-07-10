@@ -224,7 +224,13 @@
                     <div id="memoryState" class="memory-display">
                         No executable loaded
                     </div>
+                        <h3>CPU Statistics</h3>
+                        <div id="cpuStats" class="register-display">
+                            <button id="refreshStatsBtn">Refresh Stats</button>
+                            <div id="statsDisplay">No statistics available</div>
+                        </div>
                 </div>
+                
             </div>
         </div>
         
@@ -250,6 +256,7 @@
                 const uploadArea = document.getElementById('uploadArea');
                 const fileInput = document.getElementById('fileInput');
                 
+                document.getElementById('refreshStatsBtn').addEventListener('click', () => this.refreshStats());
                 // File upload
                 uploadArea.addEventListener('click', () => fileInput.click());
                 uploadArea.addEventListener('dragover', (e) => {
@@ -543,6 +550,102 @@
                 // Keep only last 100 entries
                 while (logContainer.children.length > 100) {
                     logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+            async refreshStats() {
+                try {
+                    const response = await fetch('/stats');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.displayStatistics(result.statistics);
+                    } else {
+                        this.log(`✗ Stats failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.log(`✗ Stats error: ${error.message}`, 'error');
+                }
+            }
+            
+            displayStatistics(stats) {
+                const statsDisplay = document.getElementById('statsDisplay');
+                
+                if (!stats.cpu) {
+                    statsDisplay.innerHTML = 'No CPU statistics available';
+                    return;
+                }
+                
+                const cpu = stats.cpu;
+                let html = `
+                    <strong>Total Instructions:</strong> ${cpu.totalInstructions}<br><br>
+                    
+                    <strong>Instruction Types:</strong><br>
+                `;
+                
+                // Display instruction type breakdown
+                for (const [type, count] of Object.entries(cpu.instructionTypes)) {
+                    const percentage = ((count / cpu.totalInstructions) * 100).toFixed(1);
+                    html += `${type}: ${count} (${percentage}%)<br>`;
+                }
+                
+                // Display most common unknown opcodes
+                if (cpu.topUnknown && cpu.topUnknown.length > 0) {
+                    html += `<br><strong>Top Unknown Opcodes:</strong><br>`;
+                    for (const [opcode, count] of cpu.topUnknown) {
+                        html += `${opcode}: ${count} times<br>`;
+                    }
+                }
+                
+                statsDisplay.innerHTML = html;
+                this.log('Statistics refreshed', 'info');
+            }
+            
+            updateDebugInfo(result) {
+                if (!result) return;
+                
+                const cpuState = document.getElementById('cpuState');
+                const memoryState = document.getElementById('memoryState');
+                
+                // Update CPU state (enhanced with mini-stats)
+                let cpuHtml = `
+                    <strong>Program Counter:</strong> 0x${result.cpu.pc.toString(16).padStart(8, '0')}<br>
+                    <strong>Status Register:</strong> 0x${result.cpu.flags ? '----' : '----'}<br>
+                `;
+                
+                // Add mini statistics if available
+                if (result.cpu.stats) {
+                    cpuHtml += `<br><strong>Instructions Executed:</strong> ${result.cpu.stats.totalInstructions}<br>`;
+                    
+                    if (result.cpu.stats.topUnknown && result.cpu.stats.topUnknown.length > 0) {
+                        const topUnknown = result.cpu.stats.topUnknown[0];
+                        cpuHtml += `<strong>Most Common Unknown:</strong> ${topUnknown[0]} (${topUnknown[1]}x)<br>`;
+                    }
+                }
+                
+                cpuHtml += `
+                    <strong>Data Registers:</strong><br>
+                    ${result.cpu.registers.d ? result.cpu.registers.d.map((reg, i) => 
+                        `D${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}<br>
+                    <strong>Address Registers:</strong><br>
+                    ${result.cpu.registers.a ? result.cpu.registers.a.map((reg, i) => 
+                        `A${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}
+                `;
+                
+                cpuState.innerHTML = cpuHtml;
+                
+                // Update memory state (existing code)
+                if (result.memory && result.memory.chipRam) {
+                    let memoryHtml = '<strong>Chip RAM (first 256 bytes):</strong><br>';
+                    for (let i = 0; i < Math.min(256, result.memory.chipRam.length); i += 16) {
+                        const address = i.toString(16).padStart(6, '0');
+                        const bytes = result.memory.chipRam.slice(i, i + 16)
+                            .map(b => b.toString(16).padStart(2, '0'))
+                            .join(' ');
+                        memoryHtml += `${address}: ${bytes}<br>`;
+                    }
+                    memoryState.innerHTML = memoryHtml;
+                } else {
+                    memoryState.innerHTML = 'No memory data available';
                 }
             }
         }

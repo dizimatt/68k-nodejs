@@ -114,6 +114,24 @@ app.get('/reset', (req, res) => {
         res.status(500).json({ error: 'Reset failed: ' + error.message });
     }
 });
+app.get('/stats', (req, res) => {
+    try {
+        if (!interpreter) {
+            return res.status(400).json({ error: 'No executable loaded' });
+        }
+
+        const stats = interpreter.getDetailedStats();
+        
+        res.json({
+            success: true,
+            statistics: stats
+        });
+
+    } catch (error) {
+        console.error('Stats error:', error);
+        res.status(500).json({ error: 'Failed to get statistics: ' + error.message });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Amiga Executable Runner server running on port ${PORT}`);
