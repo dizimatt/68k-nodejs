@@ -24,8 +24,11 @@ const upload = multer({
     }
 });
 
-// Global interpreter instance
-let interpreter = null;
+// *** FIX: Initialize interpreter at startup ***
+console.log('🚀 [SERVER] Initializing Amiga interpreter...');
+let interpreter = new AmigaInterpreter();
+console.log('✅ [SERVER] Interpreter initialized - ROM endpoints ready');
+
 
 // Routes
 app.get('/', (req, res) => {
@@ -184,6 +187,186 @@ app.get('/memory', (req, res) => {
         res.status(500).json({ error: 'Failed to read memory: ' + error.message });
     }
 });
+
+// kickstart rom functions...
+// Add these endpoints to your server.js
+
+// *** NEW: Get available ROMs ***
+app.get('/roms/available', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+
+        const availableRoms = interpreter.memory.getAvailableROMs();
+        const romStatus = interpreter.memory.getROMStatus();
+
+        res.json({
+            success: true,
+            available: availableRoms,
+            current: romStatus.currentRom,
+            status: romStatus
+        });
+
+    } catch (error) {
+        console.error('ROM list error:', error);
+        res.status(500).json({ error: 'Failed to get ROM list: ' + error.message });
+    }
+});
+
+// *** NEW: Load specific ROM ***
+app.post('/roms/load/:romId', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+
+        const romId = req.params.romId;
+        console.log(`🚀 [SERVER] Loading ROM: ${romId}`);
+
+        const result = interpreter.memory.loadROMById(romId);
+
+        res.json({
+            success: true,
+            message: result.message,
+            romId: result.romId,
+            romInfo: result.romInfo
+        });
+
+    } catch (error) {
+        console.error('ROM load error:', error);
+        res.status(500).json({ error: 'Failed to load ROM: ' + error.message });
+    }
+});
+
+// *** NEW: Load default ROM ***
+app.post('/roms/load-default', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+
+        console.log('🚀 [SERVER] Loading default ROM...');
+
+        const result = interpreter.memory.loadDefaultROM();
+
+        res.json({
+            success: true,
+            message: result.message,
+            romId: result.romId,
+            romInfo: result.romInfo
+        });
+
+    } catch (error) {
+        console.error('Default ROM load error:', error);
+        res.status(500).json({ error: 'Failed to load default ROM: ' + error.message });
+    }
+});
+
+// *** NEW: Get ROM status and info ***
+app.get('/roms/status', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+
+        const status = interpreter.memory.getROMStatus();
+
+        res.json({
+            success: true,
+            status: status
+        });
+
+    } catch (error) {
+        console.error('ROM status error:', error);
+        res.status(500).json({ error: 'Failed to get ROM status: ' + error.message });
+    }
+});
+
+// *** ENHANCED: Updated test endpoint with ROM testing ***
+app.get('/test-memory', (req, res) => {
+    try {
+        console.log('🧪 [SERVER] Testing MemoryManager with ROM loading...');
+        
+        // Create a test memory manager instance
+        const { MemoryManager } = require('./src/MemoryManager');
+        const testMemory = new MemoryManager();
+        
+        // Test ROM directory and available ROMs
+        const availableRoms = testMemory.getAvailableROMs();
+        
+        // Test basic initialization
+        testMemory.initializeKickstart();
+        
+        // Try to load default ROM if available
+        let romTestResults = {
+            romDirectoryExists: require('fs').existsSync(testMemory.ROM_DIRECTORY),
+            availableRomsCount: availableRoms.length,
+            availableRoms: availableRoms.map(rom => ({ id: rom.id, name: rom.name })),
+            defaultRomLoaded: false,
+            romLoadError: null
+        };
+        
+        if (availableRoms.length > 0) {
+            try {
+                const romResult = testMemory.loadDefaultROM();
+                romTestResults.defaultRomLoaded = true;
+                romTestResults.loadedRom = {
+                    id: romResult.romId,
+                    name: romResult.romInfo.name,
+                    checksum: romResult.romInfo.checksum.toString(16),
+                    residentCount: testMemory.residentModules.length
+                };
+            } catch (error) {
+                romTestResults.romLoadError = error.message;
+            }
+        }
+        
+        // Get test results
+        const results = {
+            success: true,
+            layout: {
+                chipRamSize: testMemory.chipRam.length,
+                fastRamSize: testMemory.fastRam.length,
+                romBase: testMemory.KICKSTART_ROM_BASE.toString(16),
+                romSize: testMemory.KICKSTART_ROM_SIZE,
+                execBase: testMemory.execBaseAddr ? testMemory.execBaseAddr.toString(16) : null
+            },
+            execBase: {
+                address: testMemory.execBaseAddr,
+                pointerAt4: testMemory.readLong(0x4),
+                softVer: testMemory.readWord(testMemory.execBaseAddr + 36),
+                initialized: testMemory.kickstartInitialized
+            },
+            memoryTests: {
+                execBasePointerCorrect: testMemory.readLong(0x4) === testMemory.execBaseAddr,
+                execBaseInChipRam: testMemory.execBaseAddr < testMemory.chipRam.length,
+                romAreaProtected: true
+            },
+            romTests: romTestResults
+        };
+        
+        // Test ROM write protection
+        const testRomAddr = testMemory.KICKSTART_ROM_BASE;
+        const originalValue = testMemory.readByte(testRomAddr);
+        testMemory.writeByte(testRomAddr, 0xFF); // Should be ignored
+        const afterWrite = testMemory.readByte(testRomAddr);
+        results.memoryTests.romWriteProtected = (originalValue === afterWrite);
+        
+        console.log('✅ [SERVER] Memory and ROM tests completed');
+        console.log('📋 [SERVER] Results:', results);
+        
+        res.json(results);
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Memory test failed:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`Amiga Executable Runner server running on port ${PORT}`);

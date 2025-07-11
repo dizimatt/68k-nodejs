@@ -227,6 +227,50 @@
         .memory-controls button:hover {
             background: #555;
         }
+
+        .rom-section {
+            margin-bottom: 20px;
+        }
+
+        .rom-section h3 {
+            color: #ff6600;
+            margin-bottom: 10px;
+        }
+
+        #romSelector {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 3px;
+            font-family: inherit;
+        }
+
+        #romInfo {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .upload-area.disabled {
+            cursor: not-allowed;
+            background: rgba(100, 100, 100, 0.1);
+            border-color: #666;
+        }
+
+        .upload-area.disabled:hover {
+            border-color: #666;
+            background: rgba(100, 100, 100, 0.1);
+        }
+
+        .executable-section h3 {
+            color: #0066ff;
+            margin-bottom: 10px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #444;
+        }
     </style>
 </head>
 <body>
@@ -234,17 +278,48 @@
         <h1>🖥️ Amiga Executable Runner</h1>
         
         <div class="panel">
-            <h2>Upload Amiga Executable</h2>
-            <div class="upload-area" id="uploadArea">
-                <div>
-                    <strong>Drop an Amiga executable here</strong><br>
-                    or click to select a file
+            <h2>System ROM & Executable</h2>
+            
+            <!-- ROM Management Section -->
+            <div class="rom-section">
+                <h3>🔥 Kickstart ROM</h3>
+                <div id="romStatus" class="status info">
+                    No ROM loaded - checking available ROMs...
                 </div>
-                <input type="file" id="fileInput" accept=".exe,.bin,*">
-            </div>
-            <div id="fileInfo"></div>
-        </div>
                 
+                <!-- ROM Selection -->
+                <div id="romControls" style="margin: 10px 0;">
+                    <select id="romSelector" style="margin-right: 10px; padding: 5px;">
+                        <option value="">Loading ROMs...</option>
+                    </select>
+                    <button id="loadRomBtn" disabled>Load ROM</button>
+                    <button id="loadDefaultRomBtn">Load Default</button>
+                    <button id="refreshRomsBtn">Refresh</button>
+                </div>
+                
+                <!-- ROM Info Display -->
+                <div id="romInfo" style="display: none; margin: 10px 0; padding: 10px; background: #2a2a2a; border-radius: 4px;">
+                    <h4>ROM Information:</h4>
+                    <div id="romDetails"></div>
+                </div>
+            </div>
+            
+            <hr style="margin: 20px 0; border-color: #444;">
+            
+            <!-- Executable Upload Section -->
+            <div class="executable-section">
+                <h3>📦 Amiga Executable</h3>
+                <div class="upload-area" id="uploadArea">
+                    <div>
+                        <strong>Drop an Amiga executable here</strong><br>
+                        or click to select a file
+                    </div>
+                    <input type="file" id="fileInput" accept=".exe,.bin,*">
+                </div>
+                <div id="fileInfo"></div>
+            </div>
+        </div>
+
         <div class="panel">
             <h2>Display</h2>
             <div class="canvas-container">
@@ -350,29 +425,54 @@
                 // Initialize memory view
                 const savedMode = localStorage.getItem('memoryViewMode') || 'split';
                 this.updateMemoryViewMode(savedMode);
+
+                this.initializeROMManagement();
+
             }
             
             setupEventListeners() {
                 const uploadArea = document.getElementById('uploadArea');
                 const fileInput = document.getElementById('fileInput');
                 
-                document.getElementById('refreshStatsBtn').addEventListener('click', () => this.refreshStats());
+                        // ROM management event listeners
+                document.getElementById('loadRomBtn').addEventListener('click', () => this.loadSelectedROM());
+                document.getElementById('loadDefaultRomBtn').addEventListener('click', () => this.loadDefaultROM());
+                document.getElementById('refreshRomsBtn').addEventListener('click', () => this.refreshROMs());
                 
-                // File upload
-                uploadArea.addEventListener('click', () => fileInput.click());
+                // ROM selector change
+                document.getElementById('romSelector').addEventListener('change', (e) => {
+                    const loadBtn = document.getElementById('loadRomBtn');
+                    loadBtn.disabled = !e.target.value;
+                });
+
+                document.getElementById('refreshStatsBtn').addEventListener('click', () => this.refreshStats());
+
+                uploadArea.addEventListener('click', () => {
+                    if (!fileInput.disabled) {
+                        fileInput.click();
+                    }
+                });
+                
                 uploadArea.addEventListener('dragover', (e) => {
                     e.preventDefault();
-                    uploadArea.classList.add('dragover');
+                    if (!fileInput.disabled) {
+                        uploadArea.classList.add('dragover');
+                    }
                 });
+                
                 uploadArea.addEventListener('dragleave', () => {
                     uploadArea.classList.remove('dragover');
                 });
+                
                 uploadArea.addEventListener('drop', (e) => {
                     e.preventDefault();
                     uploadArea.classList.remove('dragover');
-                    const files = e.dataTransfer.files;
-                    if (files.length > 0) {
-                        this.uploadFile(files[0]);
+                    
+                    if (!fileInput.disabled) {
+                        const files = e.dataTransfer.files;
+                        if (files.length > 0) {
+                            this.uploadFile(files[0]);
+                        }
                     }
                 });
                 
@@ -1127,6 +1227,229 @@
                 statsDisplay.innerHTML = html;
                 this.log('Statistics refreshed', 'info');
             }
+            async initializeROMManagement() {
+                this.log('Initializing ROM management...', 'info');
+                
+                // Disable executable upload until ROM is loaded
+                this.updateControlsForROM(false);
+                
+                // Check for available ROMs
+                await this.refreshROMs();
+                
+                // Try to auto-load default ROM if available
+                try {
+                    const response = await fetch('/roms/status');
+                    const result = await response.json();
+                    
+                    if (result.success && !result.status.loaded && result.status.availableRoms.length > 0) {
+                        this.log('Auto-loading default ROM...', 'info');
+                        await this.loadDefaultROM();
+                    }
+                } catch (error) {
+                    this.log('ROM auto-load failed, manual selection required', 'info');
+                }
+            }
+
+            async refreshROMs() {
+                try {
+                    this.log('Checking available ROMs...', 'info');
+                    
+                    const response = await fetch('/roms/available');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updateROMSelector(result.available);
+                        this.updateROMStatus(result.status);
+                        this.log(`Found ${result.available.length} ROM(s) available`, 'success');
+                    } else {
+                        this.log(`Failed to get ROMs: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.log(`ROM check error: ${error.message}`, 'error');
+                }
+            }
+
+            updateROMSelector(availableRoms) {
+                const selector = document.getElementById('romSelector');
+                const loadBtn = document.getElementById('loadRomBtn');
+                
+                // Clear existing options
+                selector.innerHTML = '';
+                
+                if (availableRoms.length === 0) {
+                    selector.innerHTML = '<option value="">No ROMs found - check /roms directory</option>';
+                    loadBtn.disabled = true;
+                    
+                    // Show ROM directory instructions
+                    document.getElementById('romStatus').innerHTML = `
+                        <div class="status error">
+                            <strong>No ROM files found!</strong><br>
+                            Please place your Kickstart ROM files in the <code>/roms</code> directory.<br>
+                            Required: <code>kick40068.A1200</code> (512KB)
+                        </div>
+                    `;
+                } else {
+                    // Add available ROMs to selector
+                    selector.innerHTML = '<option value="">Select a ROM...</option>';
+                    
+                    availableRoms.forEach(rom => {
+                        const option = document.createElement('option');
+                        option.value = rom.id;
+                        option.textContent = `${rom.name} (${(rom.size / 1024).toFixed(0)}KB)`;
+                        selector.appendChild(option);
+                    });
+                    
+                    loadBtn.disabled = false;
+                }
+            }
+
+            updateROMStatus(status) {
+                const statusDiv = document.getElementById('romStatus');
+                const romInfo = document.getElementById('romInfo');
+                const romDetails = document.getElementById('romDetails');
+                
+                if (status.loaded && status.romInfo) {
+                    statusDiv.innerHTML = `
+                        <div class="status success">
+                            <strong>✅ ROM Loaded:</strong> ${status.romInfo.name}<br>
+                            Residents: ${status.residentCount} | Version: ${status.romInfo.version}
+                        </div>
+                    `;
+                    
+                    // Show detailed ROM info
+                    romDetails.innerHTML = `
+                        <strong>Name:</strong> ${status.romInfo.name}<br>
+                        <strong>Version:</strong> ${status.romInfo.version}<br>
+                        <strong>Size:</strong> ${(status.romInfo.size / 1024).toFixed(0)}KB<br>
+                        <strong>Checksum:</strong> 0x${status.romInfo.checksum.toString(16).padStart(8, '0')}<br>
+                        <strong>Loaded:</strong> ${new Date(status.romInfo.loadedAt).toLocaleString()}<br>
+                        <strong>Memory Location:</strong> 0x${status.romInfo.memoryLocation.toString(16).padStart(8, '0')}<br>
+                        <strong>Resident Modules:</strong> ${status.residentCount}<br>
+                        <strong>System Libraries:</strong> ${Object.keys(status.systemLibraries).filter(k => status.systemLibraries[k]).length}
+                    `;
+                    romInfo.style.display = 'block';
+                    
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="status info">
+                            <strong>No ROM loaded</strong><br>
+                            Load a Kickstart ROM to enable full Amiga system emulation
+                        </div>
+                    `;
+                    romInfo.style.display = 'none';
+                }
+            }
+
+            async loadSelectedROM() {
+                const selector = document.getElementById('romSelector');
+                const romId = selector.value;
+                
+                if (!romId) {
+                    alert('Please select a ROM to load');
+                    return;
+                }
+                
+                try {
+                    this.log(`Loading ROM: ${romId}...`, 'info');
+                    
+                    const response = await fetch(`/roms/load/${romId}`, { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ ${result.message}`, 'success');
+                        
+                        // Refresh ROM status
+                        await this.refreshROMs();
+                        
+                        // Update controls state
+                        this.updateControlsForROM(true);
+                        
+                    } else {
+                        this.log(`❌ ROM load failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.log(`❌ ROM load error: ${error.message}`, 'error');
+                }
+            }
+
+            async loadDefaultROM() {
+                try {
+                    this.log('Loading default ROM...', 'info');
+                    
+                    const response = await fetch('/roms/load-default', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ ${result.message}`, 'success');
+                        
+                        // Refresh ROM status
+                        await this.refreshROMs();
+                        
+                        // Update controls state
+                        this.updateControlsForROM(true);
+                        
+                    } else {
+                        this.log(`❌ Default ROM load failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.log(`❌ Default ROM load error: ${error.message}`, 'error');
+                }
+            }
+
+            updateControlsForROM(romLoaded) {
+                // Enable/disable executable controls based on ROM status
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+                
+                if (romLoaded) {
+                    uploadArea.classList.remove('disabled');
+                    fileInput.disabled = false;
+                    uploadArea.style.opacity = '1';
+                } else {
+                    uploadArea.classList.add('disabled');
+                    fileInput.disabled = true;
+                    uploadArea.style.opacity = '0.5';
+                }
+            }
+
+            async testMemoryManagerFixes() {
+                console.log('🧪 [TEST] Testing MemoryManager with ROM loading...');
+                
+                try {
+                    const response = await fetch('/test-memory');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        console.log('✅ [TEST] Memory manager tests passed');
+                        this.log('Memory manager fixes verified', 'success');
+                        
+                        // Display the results
+                        console.log('📋 [TEST] Memory Layout:', result.layout);
+                        console.log('📋 [TEST] ExecBase Info:', result.execBase);
+                        console.log('📋 [TEST] ROM Tests:', result.romTests);
+                        
+                        // Show ROM test results in UI
+                        if (result.romTests.availableRomsCount > 0) {
+                            this.log(`ROM test: ${result.romTests.availableRomsCount} ROM(s) available`, 'success');
+                            
+                            if (result.romTests.defaultRomLoaded) {
+                                this.log(`ROM loaded: ${result.romTests.loadedRom.name} (${result.romTests.loadedRom.residentCount} residents)`, 'success');
+                            }
+                        } else {
+                            this.log('ROM test: No ROMs found - place ROM files in /roms directory', 'info');
+                        }
+                        
+                    } else {
+                        console.error('❌ [TEST] Memory manager tests failed:', result.error);
+                        this.log(`Memory tests failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('❌ [TEST] Test request failed:', error);
+                    this.log(`Test request failed: ${error.message}`, 'error');
+                }
+            }
+
+
         }
 
         // Global functions for memory panel controls

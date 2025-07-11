@@ -1,4 +1,6 @@
 // Enhanced MemoryManager.js - CORRECTED for Step 1 Fixes
+const fs = require('fs');
+const path = require('path');
 
 class MemoryManager {
     constructor() {
@@ -39,6 +41,33 @@ class MemoryManager {
         this.libraryStubs = new Map();                 // Track created stubs
         
         console.log('🏗️ [MEMORY] MemoryManager initialized - ready for Kickstart ROM loading');
+        
+        this.ROM_DIRECTORY = path.join(__dirname, '..', 'roms');     // /roms folder in project root
+        this.AVAILABLE_ROMS = {
+            'kickstart31_a1200': {
+                filename: 'kick40068.A1200',
+                name: 'Kickstart 3.1 (A1200)',
+                version: 39,
+                size: 524288,  // 512KB
+                description: 'Standard Kickstart 3.1 for Amiga 1200',
+                checksum: null  // Will be calculated on load
+            },
+            'kickstart31_a4000': {
+                filename: 'kick40068.A4000',
+                name: 'Kickstart 3.1 (A4000)', 
+                version: 39,
+                size: 524288,
+                description: 'Kickstart 3.1 for Amiga 4000',
+                checksum: null
+            }
+            // Future: Add more ROM options here
+        };
+        
+        this.currentRomId = null;          // Currently loaded ROM ID
+        this.currentRomInfo = null;        // Currently loaded ROM info
+        
+        console.log('🏗️ [MEMORY] MemoryManager initialized - local ROM loading enabled');
+        this.checkROMDirectory();
     }
     
     // *** CORRECTED: Proper ExecBase location in chip RAM ***
@@ -277,7 +306,7 @@ class MemoryManager {
         
         // *** CORRECTED: ROM area (read-only check) ***
         if (address >= this.KICKSTART_ROM_BASE && address < this.KICKSTART_ROM_BASE + this.KICKSTART_ROM_SIZE) {
-            console.warn(`⚠️ [MEMORY] Attempt to write to ROM at 0x${address.toString(16)} - ignored`);
+//            console.warn(`⚠️ [MEMORY] Attempt to write to ROM at 0x${address.toString(16)} - ignored`);
             return;
         }
         
@@ -424,9 +453,411 @@ class MemoryManager {
         }
         
         console.log(`ROM Loaded:        ${this.hasROMLoaded()}`);
+        if (this.currentRomInfo) {
+            console.log(`Current ROM:       ${this.currentRomInfo.name}`);
+            console.log(`ROM Checksum:      0x${this.currentRomInfo.checksum.toString(16).padStart(8, '0')}`);
+            console.log(`Residents Found:   ${this.residentModules.length}`);
+        }
         console.log(`Hunks Loaded:      ${this.hunks.length}`);
         console.log(`Kickstart Init:    ${this.kickstartInitialized}`);
         console.log('');
+    }
+
+
+    //KICKSTART ROM LOADING METHODS
+    checkROMDirectory() {
+        console.log('🔍 [ROM] Checking ROM directory...');
+        
+        // Create ROM directory if it doesn't exist
+        if (!fs.existsSync(this.ROM_DIRECTORY)) {
+            console.log('📁 [ROM] Creating ROM directory...');
+            fs.mkdirSync(this.ROM_DIRECTORY, { recursive: true });
+            
+            // Create README file with instructions
+            this.createROMReadme();
+        }
+        
+        // Check which ROMs are available
+        const availableRoms = [];
+        for (const [romId, romInfo] of Object.entries(this.AVAILABLE_ROMS)) {
+            const romPath = path.join(this.ROM_DIRECTORY, romInfo.filename);
+            if (fs.existsSync(romPath)) {
+                availableRoms.push({ id: romId, ...romInfo, path: romPath });
+                console.log(`✅ [ROM] Found: ${romInfo.name} (${romInfo.filename})`);
+            } else {
+                console.log(`❌ [ROM] Missing: ${romInfo.name} (${romInfo.filename})`);
+            }
+        }
+        
+        console.log(`📋 [ROM] ${availableRoms.length}/${Object.keys(this.AVAILABLE_ROMS).length} ROMs available`);
+        
+        if (availableRoms.length === 0) {
+            console.log('⚠️ [ROM] No ROM files found. Please place ROM files in the /roms directory.');
+        }
+        
+        return availableRoms;
+    }
+    
+    // *** NEW: Create README file with ROM instructions ***
+    createROMReadme() {
+        const readmeContent = `# Amiga Kickstart ROMs
+
+Place your Amiga Kickstart ROM files in this directory.
+
+## Required Files:
+
+### Kickstart 3.1 for Amiga 1200:
+- Filename: kick40068.A1200
+- Size: 512KB (524,288 bytes)
+- Description: Standard Kickstart 3.1 ROM for Amiga 1200
+
+### Kickstart 3.1 for Amiga 4000 (optional):
+- Filename: kick40068.A4000  
+- Size: 512KB (524,288 bytes)
+- Description: Kickstart 3.1 ROM for Amiga 4000
+
+## Legal Notice:
+You must own a legal license to use these ROM files.
+ROM files are copyrighted by Amiga Technologies.
+
+## File Format:
+- ROM files should be raw binary dumps
+- No special headers or compression
+- Exact size must match specifications
+
+## Verification:
+The emulator will validate ROM files on load and report any issues.
+`;
+
+        const readmePath = path.join(this.ROM_DIRECTORY, 'README.md');
+        fs.writeFileSync(readmePath, readmeContent);
+        console.log('📄 [ROM] Created README.md with ROM instructions');
+    }
+    
+    // *** NEW: Get list of available ROMs ***
+    getAvailableROMs() {
+        return this.checkROMDirectory();
+    }
+    
+    // *** NEW: Load specific ROM by ID ***
+    loadROMById(romId) {
+        console.log(`🚀 [ROM] Loading ROM: ${romId}`);
+        
+        // Check if ROM ID exists
+        if (!this.AVAILABLE_ROMS[romId]) {
+            throw new Error(`Unknown ROM ID: ${romId}`);
+        }
+        
+        const romInfo = this.AVAILABLE_ROMS[romId];
+        const romPath = path.join(this.ROM_DIRECTORY, romInfo.filename);
+        
+        // Check if file exists
+        if (!fs.existsSync(romPath)) {
+            throw new Error(`ROM file not found: ${romInfo.filename}`);
+        }
+        
+        // Load ROM file
+        console.log(`📁 [ROM] Reading ROM file: ${romPath}`);
+        const romBuffer = fs.readFileSync(romPath);
+        
+        // Validate ROM
+        this.validateROM(romBuffer, romInfo);
+        
+        // Load ROM into memory
+        this.loadKickstartROM(romBuffer, romId, romInfo);
+        
+        return {
+            success: true,
+            romId: romId,
+            romInfo: this.currentRomInfo,
+            message: `${romInfo.name} loaded successfully`
+        };
+    }
+    
+    // *** NEW: Load default ROM (first available) ***
+    loadDefaultROM() {
+        console.log('🚀 [ROM] Loading default ROM...');
+        
+        const availableRoms = this.getAvailableROMs();
+        
+        if (availableRoms.length === 0) {
+            throw new Error('No ROM files available. Please place ROM files in /roms directory.');
+        }
+        
+        // Default to A1200 ROM if available, otherwise first available
+        let defaultRom = availableRoms.find(rom => rom.id === 'kickstart31_a1200');
+        if (!defaultRom) {
+            defaultRom = availableRoms[0];
+        }
+        
+        console.log(`📋 [ROM] Using default ROM: ${defaultRom.name}`);
+        return this.loadROMById(defaultRom.id);
+    }
+    
+    // *** NEW: Validate ROM file ***
+    validateROM(romBuffer, expectedInfo) {
+        console.log('🔍 [ROM] Validating ROM file...');
+        
+        // Check file size
+        if (romBuffer.length !== expectedInfo.size) {
+            throw new Error(`Invalid ROM size: ${romBuffer.length}, expected ${expectedInfo.size}`);
+        }
+        
+        // Calculate checksum
+        let checksum = 0;
+        for (let i = 0; i < romBuffer.length; i += 4) {
+            if (i + 3 < romBuffer.length) {
+                const longword = (romBuffer[i] << 24) | 
+                               (romBuffer[i + 1] << 16) | 
+                               (romBuffer[i + 2] << 8) | 
+                               romBuffer[i + 3];
+                checksum = (checksum + longword) >>> 0;
+            }
+        }
+        
+        console.log(`📊 [ROM] ROM checksum: 0x${checksum.toString(16).padStart(8, '0')}`);
+        
+        // Basic ROM structure validation
+        this.validateROMStructure(romBuffer);
+        
+        console.log('✅ [ROM] ROM validation passed');
+        return checksum;
+    }
+    
+    // *** NEW: Validate ROM has correct structure ***
+    validateROMStructure(romBuffer) {
+        const view = new DataView(romBuffer.buffer);
+        
+        // Check for ROM reset vectors (should not be 0)
+        const resetSSP = view.getUint32(0, false);    // Reset Stack Pointer
+        const resetPC = view.getUint32(4, false);     // Reset Program Counter
+        
+        console.log(`📋 [ROM] Reset SSP: 0x${resetSSP.toString(16)}`);
+        console.log(`📋 [ROM] Reset PC:  0x${resetPC.toString(16)}`);
+        
+        if (resetSSP === 0 || resetPC === 0) {
+            throw new Error('Invalid ROM: Reset vectors are zero');
+        }
+        
+        // Check if Reset PC points into ROM space
+        if (resetPC < 0x00F80000 || resetPC > 0x00FFFFFF) {
+            console.warn(`⚠️ [ROM] Reset PC outside ROM space: 0x${resetPC.toString(16)}`);
+        }
+        
+        // Look for ROM tag patterns (resident modules start with 0x4AFC)
+        let residentCount = 0;
+        for (let i = 0; i < romBuffer.length - 2; i += 2) {
+            const word = view.getUint16(i, false);
+            if (word === 0x4AFC) {
+                residentCount++;
+                if (residentCount === 1) {
+                    console.log(`📦 [ROM] First resident found at offset 0x${i.toString(16)}`);
+                }
+            }
+        }
+        
+        console.log(`📦 [ROM] Found ${residentCount} potential resident modules`);
+        
+        if (residentCount === 0) {
+            throw new Error('Invalid ROM: No resident modules found');
+        }
+        
+        console.log('✅ [ROM] ROM structure validation passed');
+    }
+    
+    // *** ENHANCED: Load Kickstart ROM with full info tracking ***
+    loadKickstartROM(romBuffer, romId, romInfo) {
+        console.log(`🔥 [KICKSTART] Loading ${romInfo.name}...`);
+        
+        // Copy ROM to memory at correct location
+        this.kickstartRom = new Uint8Array(romBuffer);
+        this.writeBytes(this.KICKSTART_ROM_BASE, this.kickstartRom);
+        
+        // Store ROM information
+        this.currentRomId = romId;
+        this.currentRomInfo = {
+            ...romInfo,
+            checksum: this.calculateROMChecksum(romBuffer),
+            loadedAt: new Date().toISOString(),
+            memoryLocation: this.KICKSTART_ROM_BASE
+        };
+        
+        console.log(`📁 [KICKSTART] ROM loaded at 0x${this.KICKSTART_ROM_BASE.toString(16)}`);
+        
+        // Parse ROM resident structures
+        this.parseKickstartROM();
+        
+        // Initialize proper ExecBase from ROM data
+        this.initializeExecBaseFromROM();
+        
+        this.kickstartInitialized = true;
+        console.log(`✅ [KICKSTART] ${romInfo.name} loaded and initialized successfully`);
+        
+        return this.currentRomInfo;
+    }
+    
+    // *** NEW: Calculate ROM checksum ***
+    calculateROMChecksum(romBuffer) {
+        let checksum = 0;
+        for (let i = 0; i < romBuffer.length; i += 4) {
+            if (i + 3 < romBuffer.length) {
+                const longword = (romBuffer[i] << 24) | 
+                               (romBuffer[i + 1] << 16) | 
+                               (romBuffer[i + 2] << 8) | 
+                               romBuffer[i + 3];
+                checksum = (checksum + longword) >>> 0;
+            }
+        }
+        return checksum;
+    }
+    
+    // *** PLACEHOLDER: Parse ROM resident structures ***
+    parseKickstartROM() {
+        console.log('🔍 [KICKSTART] Parsing ROM resident structures...');
+        
+        // Scan for resident modules (0x4AFC markers)
+        this.residentModules = [];
+        
+        for (let addr = 0; addr < this.KICKSTART_ROM_SIZE; addr += 2) {
+            const word = this.readWord(this.KICKSTART_ROM_BASE + addr);
+            if (word === 0x4AFC) {
+                const residentAddr = this.KICKSTART_ROM_BASE + addr;
+                console.log(`📦 [KICKSTART] Found resident at ROM+0x${addr.toString(16)} (0x${residentAddr.toString(16)})`);
+                
+                // Parse resident structure
+                const resident = this.parseResidentStructure(residentAddr);
+                if (resident) {
+                    this.residentModules.push(resident);
+                }
+            }
+        }
+        
+        console.log(`✅ [KICKSTART] Found ${this.residentModules.length} resident modules`);
+        
+        // Find specific libraries
+        this.findSystemLibraries();
+    }
+    
+    // *** PLACEHOLDER: Parse individual resident structure ***
+    parseResidentStructure(address) {
+        try {
+            const matchWord = this.readWord(address);              // Should be 0x4AFC
+            const matchTag = this.readLong(address + 2);           // Pointer back to this structure
+            const endSkip = this.readLong(address + 6);            // End of resident
+            const flags = this.readByte(address + 10);             // Flags
+            const version = this.readByte(address + 11);           // Version
+            const type = this.readByte(address + 12);              // Node type
+            const pri = this.readByte(address + 13);               // Priority
+            const namePtr = this.readLong(address + 14);           // Name pointer
+            const idString = this.readLong(address + 18);          // ID string pointer
+            const initPtr = this.readLong(address + 22);           // Init pointer
+            
+            // Try to read name if pointer is valid
+            let name = 'Unknown';
+            if (namePtr >= this.KICKSTART_ROM_BASE && namePtr < this.KICKSTART_ROM_BASE + this.KICKSTART_ROM_SIZE) {
+                name = this.readStringFromROM(namePtr);
+            }
+            
+            console.log(`   📋 [RESIDENT] ${name} v${version} (flags=0x${flags.toString(16)}, pri=${pri})`);
+            
+            return {
+                address: address,
+                matchWord: matchWord,
+                matchTag: matchTag,
+                endSkip: endSkip,
+                flags: flags,
+                version: version,
+                type: type,
+                priority: pri,
+                namePtr: namePtr,
+                name: name,
+                idString: idString,
+                initPtr: initPtr
+            };
+            
+        } catch (error) {
+            console.warn(`⚠️ [RESIDENT] Failed to parse resident at 0x${address.toString(16)}: ${error.message}`);
+            return null;
+        }
+    }
+    
+    // *** NEW: Read string from ROM ***
+    readStringFromROM(address, maxLength = 64) {
+        let str = '';
+        for (let i = 0; i < maxLength; i++) {
+            const byte = this.readByte(address + i);
+            if (byte === 0) break; // Null terminator
+            if (byte >= 32 && byte <= 126) { // Printable ASCII
+                str += String.fromCharCode(byte);
+            } else {
+                break; // Invalid character
+            }
+        }
+        return str;
+    }
+    
+    // *** PLACEHOLDER: Find system libraries in residents ***
+    findSystemLibraries() {
+        console.log('🔍 [KICKSTART] Locating system libraries...');
+        
+        const libraries = {
+            exec: null,
+            dos: null,
+            graphics: null,
+            intuition: null
+        };
+        
+        for (const resident of this.residentModules) {
+            const name = resident.name.toLowerCase();
+            
+            if (name.includes('exec')) {
+                libraries.exec = resident;
+                console.log(`📚 [KICKSTART] Found exec.library: ${resident.name}`);
+            } else if (name.includes('dos')) {
+                libraries.dos = resident;
+                console.log(`📚 [KICKSTART] Found dos.library: ${resident.name}`);
+            } else if (name.includes('graphics')) {
+                libraries.graphics = resident;
+                console.log(`📚 [KICKSTART] Found graphics.library: ${resident.name}`);
+            } else if (name.includes('intuition')) {
+                libraries.intuition = resident;
+                console.log(`📚 [KICKSTART] Found intuition.library: ${resident.name}`);
+            }
+        }
+        
+        this.systemLibraries = libraries;
+        
+        if (!libraries.exec) {
+            console.warn('⚠️ [KICKSTART] exec.library not found in ROM!');
+        }
+    }
+    
+    // *** PLACEHOLDER: Initialize ExecBase from ROM data ***
+    initializeExecBaseFromROM() {
+        console.log('🔧 [KICKSTART] Initializing ExecBase from ROM data...');
+        
+        // For now, use our existing ExecBase initialization
+        // Later this will be enhanced to use actual ROM structures
+        this.initializeExecBase();
+        
+        // TODO: Parse actual ExecBase structure from ROM
+        // TODO: Set up real library jump tables from ROM
+        // TODO: Initialize memory lists from ROM
+        
+        console.log('✅ [KICKSTART] ExecBase initialized from ROM');
+    }
+    
+    // *** NEW: Get current ROM status ***
+    getROMStatus() {
+        return {
+            loaded: this.hasROMLoaded(),
+            currentRom: this.currentRomId,
+            romInfo: this.currentRomInfo,
+            availableRoms: this.getAvailableROMs(),
+            residentCount: this.residentModules.length,
+            systemLibraries: this.systemLibraries || {},
+            kickstartInitialized: this.kickstartInitialized
+        };
     }
 }
 
