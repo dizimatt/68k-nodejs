@@ -10,11 +10,29 @@ const SystemOpcodes = {
             opcodeTable[opcode] = () => this.op_jsr_a.call(cpu, reg);
         }
         
+        // JSR (d16,An) - Jump to Subroutine with displacement *** THIS IS YOUR MISSING 0x4EAE ***
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x4EA8 | reg;
+            opcodeTable[opcode] = () => this.op_jsr_d16_a.call(cpu, reg);
+        }
+        
+        // JSR (d8,An,Xn) - Jump to Subroutine with index
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x4EB0 | reg;
+            opcodeTable[opcode] = () => this.op_jsr_d8_a_x.call(cpu, reg);
+        }
+        
         // JSR absolute.W
         opcodeTable[0x4EB8] = () => this.op_jsr_aw.call(cpu);
         
         // JSR absolute.L
         opcodeTable[0x4EB9] = () => this.op_jsr_al.call(cpu);
+        
+        // JSR (d16,PC) - Jump to Subroutine PC-relative
+        opcodeTable[0x4EBA] = () => this.op_jsr_d16_pc.call(cpu);
+        
+        // JSR (d8,PC,Xn) - Jump to Subroutine PC-relative with index
+        opcodeTable[0x4EBB] = () => this.op_jsr_d8_pc_x.call(cpu);
         
         // LEA (An),Am - Load Effective Address (register indirect)
         for (let srcReg = 0; srcReg < 8; srcReg++) {
@@ -103,6 +121,60 @@ const SystemOpcodes = {
         };
     },
     
+    // *** THE MISSING OPCODE 0x4EAE ***
+    op_jsr_d16_a(reg) {
+        const pc = this.registers.pc - 2;
+        const displacement = this.fetchWord();
+        const signedDisp = (displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement;
+        const target = (this.registers.a[reg] + signedDisp) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR (${signedDisp},A${reg})          ; Jump to subroutine with displacement`);
+        console.log(`       → Target: 0x${target.toString(16).padStart(8, '0')} (A${reg}+${signedDisp})`);
+        console.log(`       → A${reg}=0x${this.registers.a[reg].toString(16).padStart(8, '0')}, disp=${signedDisp}`);
+        
+        this.pushLong(this.registers.pc);
+        this.registers.pc = target;
+        this.cycles += 18;
+        return { 
+            name: `JSR (${signedDisp},A${reg})`, 
+            cycles: 18,
+            asm: `JSR (${signedDisp},A${reg})`,
+            description: 'Jump to subroutine with displacement from address register',
+            pc: pc,
+            target: target,
+            immediate: displacement
+        };
+    },
+    
+    op_jsr_d8_a_x(reg) {
+        const pc = this.registers.pc - 2;
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 11) & 1; // 0=data, 1=address
+        const indexSize = (extension >> 11) & 1; // 0=word, 1=long
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        const target = (this.registers.a[reg] + displacement + indexValue) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR (${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg})    ; Jump to subroutine with index`);
+        console.log(`       → Target: 0x${target.toString(16).padStart(8, '0')}`);
+        
+        this.pushLong(this.registers.pc);
+        this.registers.pc = target;
+        this.cycles += 22;
+        return { 
+            name: `JSR (${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg})`, 
+            cycles: 22,
+            asm: `JSR (${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg})`,
+            description: 'Jump to subroutine with index from address register',
+            pc: pc,
+            target: target
+        };
+    },
+    
     op_jsr_aw() {
         const pc = this.registers.pc - 2;
         const target = this.fetchWord();
@@ -127,17 +199,69 @@ const SystemOpcodes = {
         const pc = this.registers.pc - 2;
         const target = this.fetchLong();
         
-        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR $${target.toString(16).padStart(8, '0')}           ; Jump to subroutine absolute long`);
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR ${target.toString(16).padStart(8, '0')}           ; Jump to subroutine absolute long`);
         console.log(`       → Target: 0x${target.toString(16).padStart(8, '0')}`);
         
         this.pushLong(this.registers.pc);
         this.registers.pc = target >>> 0;
         this.cycles += 20;
         return { 
-            name: `JSR $${target.toString(16)}`, 
+            name: `JSR ${target.toString(16)}`, 
             cycles: 20,
-            asm: `JSR $${target.toString(16).padStart(8, '0')}`,
+            asm: `JSR ${target.toString(16).padStart(8, '0')}`,
             description: 'Jump to subroutine absolute long',
+            pc: pc,
+            target: target
+        };
+    },
+    
+    op_jsr_d16_pc() {
+        const pc = this.registers.pc - 2;
+        const displacement = this.fetchWord();
+        const signedDisp = (displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement;
+        const target = (pc + 2 + signedDisp) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR (${signedDisp},PC)          ; Jump to subroutine PC-relative`);
+        console.log(`       → Target: 0x${target.toString(16).padStart(8, '0')} (PC+2+${signedDisp})`);
+        
+        this.pushLong(this.registers.pc);
+        this.registers.pc = target;
+        this.cycles += 18;
+        return { 
+            name: `JSR (${signedDisp},PC)`, 
+            cycles: 18,
+            asm: `JSR (${signedDisp},PC)`,
+            description: 'Jump to subroutine PC-relative',
+            pc: pc,
+            target: target,
+            immediate: displacement
+        };
+    },
+    
+    op_jsr_d8_pc_x() {
+        const pc = this.registers.pc - 2;
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 11) & 1;
+        const indexSize = (extension >> 11) & 1;
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        const target = (pc + 2 + displacement + indexValue) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: JSR (${displacement},PC,${indexType ? 'A' : 'D'}${indexReg})     ; Jump to subroutine PC-relative with index`);
+        console.log(`       → Target: 0x${target.toString(16).padStart(8, '0')}`);
+        
+        this.pushLong(this.registers.pc);
+        this.registers.pc = target;
+        this.cycles += 22;
+        return { 
+            name: `JSR (${displacement},PC,${indexType ? 'A' : 'D'}${indexReg})`, 
+            cycles: 22,
+            asm: `JSR (${displacement},PC,${indexType ? 'A' : 'D'}${indexReg})`,
+            description: 'Jump to subroutine PC-relative with index',
             pc: pc,
             target: target
         };
