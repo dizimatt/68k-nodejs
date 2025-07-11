@@ -229,13 +229,51 @@ class MemoryManager {
         return false;
     }
     
-    // *** CORRECTED: Get library function info ***
     getLibraryFunctionInfo(address) {
-        // This will be implemented properly after ROM loading
-        // For now, return null as we don't have real library info
+        // Check if address matches any known library function
+        for (const [libName, vectors] of this.libraryVectors) {
+            if (vectors) {
+                for (const vector of vectors) {
+                    if (vector.address === address || vector.jumpAddress === address) {
+                        return {
+                            library: libName,
+                            function: vector.name,
+                            address: vector.address,
+                            offset: vector.offset,
+                            isJumpTable: address === vector.jumpAddress
+                        };
+                    }
+                }
+            }
+        }
+        
         return null;
     }
-    
+
+    debugROMParsing() {
+        console.log('\n📋 [ROM DEBUG] Parsing Results Summary:');
+        console.log(`Total Residents: ${this.residentModules.length}`);
+        console.log(`Libraries Found: ${this.residentModules.filter(r => r.isLibrary).length}`);
+        console.log(`Vector Tables: ${this.libraryVectors.size}`);
+        
+        console.log('\n📦 [ROM DEBUG] Resident Modules:');
+        this.residentModules.forEach((resident, index) => {
+            const vectorCount = resident.vectorTable ? resident.vectorTable.length : 0;
+            console.log(`  ${index + 1}. ${resident.name} v${resident.version} (${resident.isLibrary ? 'Library' : 'Module'}, ${vectorCount} vectors)`);
+        });
+        
+        console.log('\n📚 [ROM DEBUG] Library Vectors:');
+        for (const [libName, vectors] of this.libraryVectors) {
+            console.log(`  ${libName}: ${vectors.length} vectors`);
+            vectors.slice(0, 3).forEach(vector => {
+                console.log(`    - ${vector.name}: 0x${vector.address.toString(16)}`);
+            });
+            if (vectors.length > 3) {
+                console.log(`    ... and ${vectors.length - 3} more`);
+            }
+        }
+    }
+
     // *** Existing memory methods (unchanged) ***
     loadHunks(hunks) {
         // Initialize basic ExecBase when first executable is loaded
@@ -711,33 +749,369 @@ The emulator will validate ROM files on load and report any issues.
         return checksum;
     }
     
-    // *** PLACEHOLDER: Parse ROM resident structures ***
     parseKickstartROM() {
         console.log('🔍 [KICKSTART] Parsing ROM resident structures...');
         
         // Scan for resident modules (0x4AFC markers)
         this.residentModules = [];
+        this.libraryVectors = new Map(); // Store library vector tables
         
+        // Scan ROM for resident structures
         for (let addr = 0; addr < this.KICKSTART_ROM_SIZE; addr += 2) {
             const word = this.readWord(this.KICKSTART_ROM_BASE + addr);
             if (word === 0x4AFC) {
                 const residentAddr = this.KICKSTART_ROM_BASE + addr;
                 console.log(`📦 [KICKSTART] Found resident at ROM+0x${addr.toString(16)} (0x${residentAddr.toString(16)})`);
                 
-                // Parse resident structure
-                const resident = this.parseResidentStructure(residentAddr);
+                // Parse resident structure with full details
+                const resident = this.parseResidentStructureComplete(residentAddr);
                 if (resident) {
                     this.residentModules.push(resident);
+                    
+                    // If this is a library, parse its vector table
+                    if (resident.isLibrary && resident.initPtr) {
+                        this.parseLibraryVectors(resident);
+                    }
                 }
             }
         }
         
         console.log(`✅ [KICKSTART] Found ${this.residentModules.length} resident modules`);
         
-        // Find specific libraries
-        this.findSystemLibraries();
+        // Find and analyze system libraries
+        this.analyzeSystemLibraries();
+    }
+
+    parseResidentStructureComplete(address) {
+        try {
+            const matchWord = this.readWord(address);              // Should be 0x4AFC
+            const matchTag = this.readLong(address + 2);           // Pointer back to this structure
+            const endSkip = this.readLong(address + 6);            // End of resident
+            const flags = this.readByte(address + 10);             // Flags
+            const version = this.readByte(address + 11);           // Version
+            const type = this.readByte(address + 12);              // Node type
+            const pri = this.readByte(address + 13);               // Priority
+            const namePtr = this.readLong(address + 14);           // Name pointer
+            const idString = this.readLong(address + 18);          // ID string pointer
+            const initPtr = this.readLong(address + 22);           // Init pointer
+            
+            // Read name string
+            let name = 'Unknown';
+            if (this.isValidROMPointer(namePtr)) {
+                name = this.readStringFromROM(namePtr);
+            }
+            
+            // Read ID string
+            let idStr = '';
+            if (this.isValidROMPointer(idString)) {
+                idStr = this.readStringFromROM(idString, 128);
+            }
+            
+            // Determine if this is a library
+            const isLibrary = (type === 9) || name.toLowerCase().includes('.library');
+            
+            console.log(`   📋 [RESIDENT] ${name} v${version}`);
+            console.log(`       Type: ${type} (${isLibrary ? 'Library' : 'Other'}), Priority: ${pri}`);
+            console.log(`       Flags: 0x${flags.toString(16)}, Init: 0x${initPtr.toString(16)}`);
+            if (idStr) {
+                console.log(`       ID: ${idStr}`);
+            }
+            
+            return {
+                address: address,
+                matchWord: matchWord,
+                matchTag: matchTag,
+                endSkip: endSkip,
+                flags: flags,
+                version: version,
+                type: type,
+                priority: pri,
+                namePtr: namePtr,
+                name: name,
+                idString: idString,
+                idStr: idStr,
+                initPtr: initPtr,
+                isLibrary: isLibrary,
+                libraryBase: null,      // Will be set when library is initialized
+                vectorTable: null       // Will be populated for libraries
+            };
+            
+        } catch (error) {
+            console.warn(`⚠️ [RESIDENT] Failed to parse resident at 0x${address.toString(16)}: ${error.message}`);
+            return null;
+        }
     }
     
+    isValidROMPointer(ptr) {
+        return ptr >= this.KICKSTART_ROM_BASE && ptr < (this.KICKSTART_ROM_BASE + this.KICKSTART_ROM_SIZE);
+    }
+
+    // *** NEW: Parse library vector tables ***
+    parseLibraryVectors(resident) {
+        console.log(`🔧 [LIBRARY] Parsing vectors for ${resident.name}...`);
+        
+        try {
+            // Library initialization typically contains vector table information
+            // We need to simulate the library initialization to find the vectors
+            
+            if (!this.isValidROMPointer(resident.initPtr)) {
+                console.warn(`⚠️ [LIBRARY] Invalid init pointer for ${resident.name}`);
+                return;
+            }
+            
+            // Read initialization code to find vector table
+            const vectors = this.extractLibraryVectors(resident);
+            
+            if (vectors && vectors.length > 0) {
+                resident.vectorTable = vectors;
+                this.libraryVectors.set(resident.name, vectors);
+                
+                console.log(`✅ [LIBRARY] Found ${vectors.length} vectors for ${resident.name}`);
+                
+                // Show first few vectors for debugging
+                vectors.slice(0, 5).forEach((vector, index) => {
+                    console.log(`   Vector ${index + 1}: 0x${vector.address.toString(16)} (${vector.name || 'Unknown'})`);
+                });
+                
+            } else {
+                console.warn(`⚠️ [LIBRARY] No vectors found for ${resident.name}`);
+            }
+            
+        } catch (error) {
+            console.warn(`⚠️ [LIBRARY] Failed to parse vectors for ${resident.name}: ${error.message}`);
+        }
+    }
+
+    // *** NEW: Extract library vectors from ROM data ***
+    extractLibraryVectors(resident) {
+        // This is a simplified vector extraction
+        // Real Amiga libraries use MakeLibrary() and complex initialization
+        
+        const vectors = [];
+        
+        // Look for vector table patterns near the initialization code
+        const initAddr = resident.initPtr;
+        const searchRange = 1024; // Search 1KB around init address
+        
+        // Pattern 1: Look for jump table (series of JMP instructions)
+        for (let addr = initAddr; addr < initAddr + searchRange && this.isValidROMPointer(addr); addr += 2) {
+            const instruction = this.readWord(addr);
+            
+            // JMP absolute.L = 0x4EF9
+            if (instruction === 0x4EF9) {
+                const targetAddr = this.readLong(addr + 2);
+                
+                if (this.isValidROMPointer(targetAddr)) {
+                    vectors.push({
+                        address: targetAddr,
+                        jumpAddress: addr,
+                        offset: vectors.length * -6, // Standard negative offset
+                        name: this.guessVectorName(resident.name, vectors.length)
+                    });
+                }
+            }
+        }
+        
+        // Pattern 2: Look for function address tables
+        if (vectors.length === 0) {
+            vectors.push(...this.findFunctionAddressTable(resident));
+        }
+        
+        return vectors;
+    }
+
+    // *** NEW: Find function address tables ***
+    findFunctionAddressTable(resident) {
+        const vectors = [];
+        const initAddr = resident.initPtr;
+        
+        // Look for patterns of consecutive function addresses
+        for (let addr = initAddr; addr < initAddr + 512 && this.isValidROMPointer(addr); addr += 4) {
+            const funcAddr = this.readLong(addr);
+            
+            // Check if this looks like a function address (in ROM space)
+            if (this.isValidROMPointer(funcAddr)) {
+                // Check if next few addresses are also valid (indicating a table)
+                let tableSize = 1;
+                for (let i = 1; i < 10; i++) {
+                    const nextAddr = this.readLong(addr + (i * 4));
+                    if (this.isValidROMPointer(nextAddr)) {
+                        tableSize++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // If we found a table of at least 3 functions, use it
+                if (tableSize >= 3) {
+                    for (let i = 0; i < tableSize; i++) {
+                        const funcPtr = this.readLong(addr + (i * 4));
+                        vectors.push({
+                            address: funcPtr,
+                            tableAddress: addr + (i * 4),
+                            offset: i * -6,
+                            name: this.guessVectorName(resident.name, i)
+                        });
+                    }
+                    break; // Found our table
+                }
+            }
+        }
+        
+        return vectors;
+    }
+
+    // *** NEW: Guess vector names based on library and position ***
+    guessVectorName(libraryName, vectorIndex) {
+        const libName = libraryName.toLowerCase();
+        
+        if (libName.includes('exec')) {
+            const execFunctions = [
+                'Open', 'Close', 'Expunge', 'Reserved',
+                'Supervisor', 'ExitIntr', 'Schedule', 'Reschedule',
+                'Switch', 'Dispatch', 'Exception', 'InitCode',
+                'InitStruct', 'MakeLibrary', 'MakeFunctions', 'FindResident',
+                'InitResident', 'Alert', 'Debug', 'Disable',
+                'Enable', 'Forbid', 'Permit', 'SetSR',
+                'SuperState', 'UserState', 'SetIntVector', 'AddIntServer',
+                'RemIntServer', 'Cause', 'Allocate', 'Deallocate',
+                'AllocMem', 'AllocAbs', 'FreeMem', 'AvailMem',
+                'AllocEntry', 'FreeEntry', 'Insert', 'Remove',
+                'Enqueue', 'FindName', 'AddTask', 'RemTask',
+                'FindTask', 'SetTaskPri', 'SetSignal', 'SetExcept',
+                'Wait', 'Signal', 'AllocSignal', 'FreeSignal',
+                'AllocTrap', 'FreeTrap', 'AddPort', 'RemPort',
+                'PutMsg', 'GetMsg', 'ReplyMsg', 'WaitPort',
+                'FindPort', 'AddLibrary', 'RemLibrary', 'OldOpenLibrary',
+                'CloseLibrary', 'SetFunction', 'SumLibrary', 'AddDevice',
+                'RemDevice', 'OpenDevice', 'CloseDevice', 'DoIO',
+                'SendIO', 'CheckIO', 'WaitIO', 'AbortIO',
+                'AddResource', 'RemResource', 'OpenResource', 'RawIOInit',
+                'RawMayGetChar', 'RawPutChar', 'RawDoFmt', 'GetCC',
+                'TypeOfMem', 'Procure', 'Vacate', 'OpenLibrary'
+            ];
+            
+            return execFunctions[vectorIndex] || `ExecFunc${vectorIndex}`;
+        }
+        
+        if (libName.includes('dos')) {
+            const dosFunctions = [
+                'Open', 'Close', 'Expunge', 'Reserved',
+                'Read', 'Write', 'Input', 'Output',
+                'Seek', 'DeleteFile', 'Rename', 'Lock',
+                'UnLock', 'DupLock', 'Examine', 'ExNext',
+                'Info', 'CreateDir', 'SetProtection', 'SetComment',
+                'SetFileDate', 'SameLock', 'CurrentDir', 'CreateProc',
+                'RunCommand', 'GetCurrentDirName', 'GetProgramName', 'SetProgramName',
+                'GetPrompt', 'SetPrompt', 'FilePart', 'PathPart',
+                'AddPart', 'RemPart', 'Execute', 'Exit'
+            ];
+            
+            return dosFunctions[vectorIndex] || `DOSFunc${vectorIndex}`;
+        }
+        
+        return `${libraryName}Func${vectorIndex}`;
+    }
+
+    // *** NEW: Analyze system libraries and their capabilities ***
+    analyzeSystemLibraries() {
+        console.log('🔍 [KICKSTART] Analyzing system libraries...');
+        
+        const libraries = {
+            exec: null,
+            dos: null,
+            graphics: null,
+            intuition: null
+        };
+        
+        // Find each system library
+        for (const resident of this.residentModules) {
+            const name = resident.name.toLowerCase();
+            
+            if (name.includes('exec') && resident.isLibrary) {
+                libraries.exec = resident;
+                console.log(`📚 [KICKSTART] Found exec.library: ${resident.name} v${resident.version}`);
+                
+                // Special handling for exec.library - it's the core
+                this.analyzeExecLibrary(resident);
+                
+            } else if (name.includes('dos') && resident.isLibrary) {
+                libraries.dos = resident;
+                console.log(`📚 [KICKSTART] Found dos.library: ${resident.name} v${resident.version}`);
+                
+            } else if (name.includes('graphics') && resident.isLibrary) {
+                libraries.graphics = resident;
+                console.log(`📚 [KICKSTART] Found graphics.library: ${resident.name} v${resident.version}`);
+                
+            } else if (name.includes('intuition') && resident.isLibrary) {
+                libraries.intuition = resident;
+                console.log(`📚 [KICKSTART] Found intuition.library: ${resident.name} v${resident.version}`);
+            }
+        }
+        
+        this.systemLibraries = libraries;
+        
+        // Show analysis summary
+        console.log('\n📊 [KICKSTART] System Library Analysis:');
+        Object.keys(libraries).forEach(libName => {
+            const lib = libraries[libName];
+            if (lib) {
+                const vectorCount = lib.vectorTable ? lib.vectorTable.length : 0;
+                console.log(`  ✅ ${libName}.library: v${lib.version}, ${vectorCount} vectors`);
+            } else {
+                console.log(`  ❌ ${libName}.library: Not found`);
+            }
+        });
+        
+        if (!libraries.exec) {
+            console.warn('⚠️ [KICKSTART] exec.library not found - this will prevent proper operation!');
+        }
+    }
+
+    // *** NEW: Special analysis for exec.library ***
+    analyzeExecLibrary(execResident) {
+        console.log('🔧 [EXEC] Analyzing exec.library structure...');
+        
+        // exec.library is special - it provides the base for all other libraries
+        // Find OpenLibrary, AllocMem, FreeMem functions specifically
+        
+        if (execResident.vectorTable && execResident.vectorTable.length > 0) {
+            // Map known exec functions
+            const execFunctionMap = new Map();
+            
+            execResident.vectorTable.forEach((vector, index) => {
+                const funcName = vector.name;
+                if (funcName) {
+                    execFunctionMap.set(funcName, {
+                        address: vector.address,
+                        offset: vector.offset,
+                        index: index
+                    });
+                    
+                    // Log important functions
+                    if (['OpenLibrary', 'CloseLibrary', 'AllocMem', 'FreeMem'].includes(funcName)) {
+                        console.log(`   🎯 [EXEC] ${funcName}: 0x${vector.address.toString(16)} (offset ${vector.offset})`);
+                    }
+                }
+            });
+            
+            execResident.functionMap = execFunctionMap;
+            
+            // Store key function addresses for quick access
+            this.execFunctions = {
+                openLibrary: execFunctionMap.get('OpenLibrary'),
+                closeLibrary: execFunctionMap.get('CloseLibrary'),
+                allocMem: execFunctionMap.get('AllocMem'),
+                freeMem: execFunctionMap.get('FreeMem')
+            };
+            
+            console.log(`✅ [EXEC] Mapped ${execFunctionMap.size} exec.library functions`);
+            
+        } else {
+            console.warn('⚠️ [EXEC] No vector table found for exec.library');
+        }
+    }
+
     // *** PLACEHOLDER: Parse individual resident structure ***
     parseResidentStructure(address) {
         try {
