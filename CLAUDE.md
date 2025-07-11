@@ -13,10 +13,12 @@ This project is a **Node.js-based Amiga A1200 emulator** that executes 68k machi
 - Amiga Hunk executable format loading
 
 **Frontend (HTML5/JavaScript):**
-- Web-based control interface
+- Web-based control interface with intuitive layout
 - HTML5 Canvas for authentic Amiga display output
-- Real-time debugging and system inspection
+- Context-aware debugging with split memory panels
+- Real-time system inspection and instruction tracing
 - File upload for Amiga executables
+- Enhanced UI layout: Upload → Display → Debug Information → Controls
 
 **Display Pipeline:**
 ```
@@ -77,9 +79,11 @@ amiga-executable-runner/
   
 - [x] **Web Interface** (index.html + server.js)
   - File upload for Amiga executables
-  - Step-by-step execution control
-  - Real-time CPU and memory debugging
-  - HTML5 canvas placeholder for display
+  - HTML5 canvas for display output
+  - Enhanced UI layout with logical panel organization
+  - Context-aware debugging with split memory panels
+  - Real-time CPU and memory debugging with automatic context updates
+  - Step-by-step execution control with assembler instruction display
 
 - [x] **System Integration** (AmigaInterpreter.js)
   - Component orchestration

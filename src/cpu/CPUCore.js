@@ -63,10 +63,7 @@ class CPUCore {
         if (handler) {
             // *** This is where the enhanced data comes from ***
             const result = handler();
-            
-            // *** DEBUG: Log what the opcode handler returns ***
-            console.log('🔍 [CPU] Opcode handler result:', result);
-            
+                        
             this.instructionCount++;
             this.updateStats(result.name);
             this.updateSRFromFlags();

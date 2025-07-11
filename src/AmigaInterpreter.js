@@ -167,10 +167,7 @@ class AmigaInterpreter {
 
         // Execute one CPU instruction
         const cpuResult = this.cpu.step();
-        
-        // *** DEBUG: Log what the CPU returns ***
-        console.log('🔍 [INTERPRETER] CPU step result:', cpuResult);
-        
+                
         // Update custom chips only if still running
         if (this.cpu.isRunning()) {
             this.customChips.copper.update();
