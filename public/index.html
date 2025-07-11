@@ -130,7 +130,7 @@
         .memory-display {
             font-size: 10px;
             line-height: 1.2;
-            max-height: 200px;
+            max-height: none;
             overflow-y: auto;
         }
         
@@ -172,6 +172,60 @@
         
         .log-entry.success {
             color: #44ff44;
+        }
+
+        /* Enhanced Memory Panel Styles */
+        .memory-split-container {
+            background: #0a0a0a;
+            border-radius: 4px;
+            height: 350px;
+            border: 1px solid #333;
+        }
+
+        .memory-panel-top, .memory-panel-bottom {
+            background: #0a0a0a;
+        }
+
+        .memory-resize-handle {
+            height: 4px;
+            background: #444;
+            cursor: ns-resize;
+            user-select: none;
+        }
+
+        .memory-resize-handle:hover {
+            background: #666;
+        }
+
+        .memory-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .memory-controls input {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-size: 11px;
+            border-radius: 3px;
+        }
+
+        .memory-controls button {
+            background: #444;
+            border: 1px solid #666;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+
+        .memory-controls button:hover {
+            background: #555;
         }
     </style>
 </head>
@@ -221,14 +275,54 @@
                 
                 <div class="debug-section">
                     <h3>Memory</h3>
-                    <div id="memoryState" class="memory-display">
-                        No executable loaded
+                    
+                    <!-- Memory Controls -->
+                    <div class="memory-controls">
+                        <button id="memoryViewBtn" onclick="toggleMemoryView()">
+                            📋 Toggle View
+                        </button>
+                        <input type="text" id="memoryAddressInput" placeholder="0x400000">
+                        <button onclick="showMemoryAt()">
+                            🔍 Show
+                        </button>
                     </div>
-                        <h3>CPU Statistics</h3>
+                    
+                    <!-- Split Memory Display -->
+                    <div class="memory-split-container">
+                        
+                        <!-- Top Panel: Standard Memory View -->
+                        <div class="memory-panel-top" style="height: 50%; overflow-y: auto; padding: 5px; border-bottom: 1px solid #444;">
+                            <div style="font-size: 10px; color: #888; margin-bottom: 5px;">Standard Memory (Chip RAM)</div>
+                            <div id="memoryState" class="memory-display">
+                                No executable loaded
+                            </div>
+                        </div>
+                        
+                        <!-- Resize Handle -->
+                        <div class="memory-resize-handle" onmousedown="startMemoryResize(event)">
+                        </div>
+                        
+                        <!-- Bottom Panel: Context Memory View -->
+                        <div class="memory-panel-bottom" style="height: calc(50% - 4px); overflow-y: auto; padding: 5px;">
+                            <div style="font-size: 10px; color: #888; margin-bottom: 5px;">
+                                <span id="contextMemoryTitle">Context Memory</span>
+                                <span id="contextMemoryAddress" style="color: #ff6600;"></span>
+                            </div>
+                            <div id="contextMemoryState" class="memory-display">
+                                No context data
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                    <!-- CPU Statistics -->
+                    <div style="margin-top: 15px;">
+                        <h4 style="color: #ff6600; margin-bottom: 10px;">CPU Statistics</h4>
                         <div id="cpuStats" class="register-display">
                             <button id="refreshStatsBtn">Refresh Stats</button>
                             <div id="statsDisplay">No statistics available</div>
                         </div>
+                    </div>
                 </div>
                 
             </div>
@@ -249,7 +343,13 @@
                 this.canvas = document.getElementById('display-canvas');
                 this.ctx = this.canvas.getContext('2d');
                 this.imageData = this.ctx.createImageData(320, 256);
+                this.memoryPanelSplit = 50; // Percentage split
+                this.isResizing = false;
                 this.log('System ready');
+                
+                // Initialize memory view
+                const savedMode = localStorage.getItem('memoryViewMode') || 'split';
+                this.updateMemoryViewMode(savedMode);
             }
             
             setupEventListeners() {
@@ -257,6 +357,7 @@
                 const fileInput = document.getElementById('fileInput');
                 
                 document.getElementById('refreshStatsBtn').addEventListener('click', () => this.refreshStats());
+                
                 // File upload
                 uploadArea.addEventListener('click', () => fileInput.click());
                 uploadArea.addEventListener('dragover', (e) => {
@@ -286,6 +387,214 @@
                 document.getElementById('stepBtn').addEventListener('click', () => this.step());
                 document.getElementById('resetBtn').addEventListener('click', () => this.reset());
                 document.getElementById('loadSampleBtn').addEventListener('click', () => this.loadSample());
+            }
+            
+            // Memory panel management
+            startMemoryResize(e) {
+                this.isResizing = true;
+                document.addEventListener('mousemove', (e) => this.doMemoryResize(e));
+                document.addEventListener('mouseup', () => this.stopMemoryResize());
+                e.preventDefault();
+            }
+
+            doMemoryResize(e) {
+                if (!this.isResizing) return;
+                
+                const container = document.querySelector('.memory-split-container');
+                const rect = container.getBoundingClientRect();
+                const percentage = ((e.clientY - rect.top) / rect.height) * 100;
+                
+                // Limit between 20% and 80%
+                if (percentage >= 20 && percentage <= 80) {
+                    this.memoryPanelSplit = percentage;
+                    this.updateMemoryPanelSizes();
+                }
+            }
+
+            stopMemoryResize() {
+                this.isResizing = false;
+                document.removeEventListener('mousemove', this.doMemoryResize);
+                document.removeEventListener('mouseup', this.stopMemoryResize);
+            }
+
+            updateMemoryPanelSizes() {
+                const topPanel = document.querySelector('.memory-panel-top');
+                const bottomPanel = document.querySelector('.memory-panel-bottom');
+                
+                topPanel.style.height = `${this.memoryPanelSplit}%`;
+                bottomPanel.style.height = `calc(${100 - this.memoryPanelSplit}% - 4px)`;
+            }
+
+            toggleMemoryView() {
+                // Toggle between different memory view modes
+                const currentMode = localStorage.getItem('memoryViewMode') || 'split';
+                const newMode = currentMode === 'split' ? 'single' : 'split';
+                
+                localStorage.setItem('memoryViewMode', newMode);
+                this.updateMemoryViewMode(newMode);
+            }
+
+            updateMemoryViewMode(mode) {
+                const container = document.querySelector('.memory-split-container');
+                const topPanel = document.querySelector('.memory-panel-top');
+                const bottomPanel = document.querySelector('.memory-panel-bottom');
+                const resizeHandle = document.querySelector('.memory-resize-handle');
+                
+                if (mode === 'single') {
+                    topPanel.style.height = '100%';
+                    bottomPanel.style.display = 'none';
+                    resizeHandle.style.display = 'none';
+                } else {
+                    topPanel.style.height = `${this.memoryPanelSplit}%`;
+                    bottomPanel.style.display = 'block';
+                    bottomPanel.style.height = `calc(${100 - this.memoryPanelSplit}% - 4px)`;
+                    resizeHandle.style.display = 'block';
+                }
+            }
+
+            showMemoryAt() {
+                const input = document.getElementById('memoryAddressInput');
+                let address = input.value.trim();
+                
+                // Parse address
+                if (address.startsWith('0x')) {
+                    address = parseInt(address, 16);
+                } else {
+                    address = parseInt(address, 16);
+                }
+                
+                if (isNaN(address)) {
+                    alert('Invalid address format. Use 0x400000 or 400000');
+                    return;
+                }
+                
+                this.showContextMemory(address, `Manual: 0x${address.toString(16).padStart(8, '0')}`);
+            }
+
+            showContextMemory(address, title) {
+                const titleElement = document.getElementById('contextMemoryTitle');
+                const addressElement = document.getElementById('contextMemoryAddress');
+                const stateElement = document.getElementById('contextMemoryState');
+                
+                if (!titleElement || !addressElement || !stateElement) {
+                    console.warn('Context memory elements not found');
+                    return;
+                }
+                
+                titleElement.textContent = title;
+                addressElement.textContent = ` @ 0x${address.toString(16).padStart(8, '0')}`;
+                
+                // Request memory data from server (if endpoint exists) or simulate
+                this.fetchMemoryData(address)
+                    .then(memoryData => {
+                        this.displayContextMemoryData(memoryData, address);
+                    })
+                    .catch(error => {
+                        // Fallback to simulated memory display
+                        this.displaySimulatedMemory(address);
+                    });
+            }
+
+            async fetchMemoryData(address) {
+                // Try to fetch real memory data from server
+                try {
+                    const response = await fetch(`/memory?address=0x${address.toString(16)}&size=128`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            return data.memory;
+                        }
+                    }
+                } catch (e) {
+                    // Server endpoint doesn't exist yet, fall back to simulation
+                }
+                
+                // Generate simulated memory data
+                const memory = [];
+                for (let i = 0; i < 128; i++) {
+                    // Simulate some realistic-looking memory content
+                    const val = (address + i) & 0xFF;
+                    memory.push(val);
+                }
+                return memory;
+            }
+
+            displayContextMemoryData(memoryData, baseAddress) {
+                const stateElement = document.getElementById('contextMemoryState');
+                if (!stateElement) return;
+                
+                let html = '';
+                
+                for (let i = 0; i < memoryData.length; i += 16) {
+                    const address = (baseAddress + i).toString(16).padStart(8, '0');
+                    const bytes = memoryData.slice(i, i + 16)
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join(' ');
+                    
+                    // ASCII representation
+                    const ascii = memoryData.slice(i, i + 16)
+                        .map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.')
+                        .join('');
+                    
+                    html += `<div style="font-family: monospace; font-size: 10px; line-height: 1.2; margin: 1px 0;">`;
+                    html += `<span style="color: #888;">${address}:</span> `;
+                    html += `<span style="color: #fff;">${bytes.padEnd(47)}</span> `;
+                    html += `<span style="color: #888;">|${ascii}|</span>`;
+                    html += `</div>`;
+                }
+                
+                stateElement.innerHTML = html;
+            }
+
+            displaySimulatedMemory(address) {
+                const memoryData = [];
+                for (let i = 0; i < 128; i++) {
+                    memoryData.push((address + i) & 0xFF);
+                }
+                this.displayContextMemoryData(memoryData, address);
+            }
+
+            // Context memory update based on instruction execution
+            updateContextMemoryFromInstruction(result) {
+                if (!result || !result.cpu) return;
+                
+                const instruction = result.cpu.asm;
+                if (!instruction) return;
+                
+                // LEA instructions - show target memory
+                if (instruction.includes('LEA') && result.cpu.newValue) {
+                    this.showContextMemory(result.cpu.newValue, 'LEA Target');
+                    this.log(`🔍 [MEMORY] Showing LEA target: 0x${result.cpu.newValue.toString(16).padStart(8, '0')}`, 'info');
+                    return;
+                }
+                
+                // MOVEA instructions - show target memory  
+                if (instruction.includes('MOVEA') && result.cpu.newValue) {
+                    this.showContextMemory(result.cpu.newValue, 'MOVEA Target');
+                    this.log(`🔍 [MEMORY] Showing MOVEA target: 0x${result.cpu.newValue.toString(16).padStart(8, '0')}`, 'info');
+                    return;
+                }
+                
+                // JSR instructions - show target memory
+                if (instruction.includes('JSR') && result.cpu.target) {
+                    this.showContextMemory(result.cpu.target, 'JSR Target');
+                    this.log(`🔍 [MEMORY] Showing JSR target: 0x${result.cpu.target.toString(16).padStart(8, '0')}`, 'info');
+                    return;
+                }
+                
+                // Memory indirect operations - show referenced memory
+                if (instruction.includes('(A') && result.cpu.target) {
+                    this.showContextMemory(result.cpu.target, 'Memory Reference');
+                    this.log(`🔍 [MEMORY] Showing memory reference: 0x${result.cpu.target.toString(16).padStart(8, '0')}`, 'info');
+                    return;
+                }
+                
+                // MOVE from absolute address
+                if (instruction.includes('MOVE') && instruction.includes('$') && result.cpu.immediate) {
+                    this.showContextMemory(result.cpu.immediate, 'MOVE Source');
+                    this.log(`🔍 [MEMORY] Showing MOVE source: 0x${result.cpu.immediate.toString(16).padStart(8, '0')}`, 'info');
+                    return;
+                }
             }
             
             async uploadFile(file) {
@@ -340,6 +649,7 @@
                     this.showStatus('Execution failed', 'error');
                 }
             }
+
             async refreshDebugPanels() {
                 try {
                     console.log('Refreshing debug panels...');
@@ -389,6 +699,7 @@
                     this.log('Debug panel refresh failed', 'error');
                 }
             }
+
             async step() {
                 try {
                     const response = await fetch('/step');
@@ -418,6 +729,16 @@
                             if (result.cpu.immediate !== undefined) {
                                 this.log(`     → Immediate: 0x${result.cpu.immediate.toString(16).padStart(8, '0')} (${result.cpu.immediate})`, 'info');
                             }
+                            
+                            // *** NEW: Automatically update context memory panel ***
+
+                            // *** DEBUG: Check if function is called ***
+                            console.log('🔍 [DEBUG] About to call updateContextMemoryFromInstruction');
+                            console.log('🔍 [DEBUG] Result object:', result);
+                            console.log('🔍 [DEBUG] result.cpu:', result.cpu);
+                            console.log('🔍 [DEBUG] result.cpu.asm:', result.cpu ? result.cpu.asm : 'NO ASM');
+
+                            this.updateContextMemoryFromInstruction(result);                            
                         } else {
                             // Fallback for instructions without enhanced debug
                             this.log(`🔧 [STEP] PC=0x${pc.toString(16).padStart(8, '0')}: ${instruction} (${cycles} cycles)`, 'info');
@@ -447,7 +768,12 @@
                     this.log(`✗ Step error: ${error.message}`, 'error');
                     this.showStatus('Step failed', 'error');
                 }
-            }            
+            }
+            testContextMemory() {
+                console.log('🧪 [TEST] Testing context memory manually');
+                this.showContextMemory(0x400000, 'TEST');
+            }
+            
             async reset() {
                 this.log('Resetting system...', 'info');
                 
@@ -575,6 +901,7 @@
                 
                 return new Uint8Array(finalBuffer);
             }            
+            
             updateFileInfo(info) {
                 const fileInfo = document.getElementById('fileInfo');
                 fileInfo.innerHTML = `
@@ -696,6 +1023,7 @@
                 
                 console.log('Debug info update completed');
             }            
+            
             updateDisplay(displayData) {
                 if (!displayData || !displayData.pixels) return;
                 
@@ -716,6 +1044,9 @@
             clearDebugInfo() {
                 document.getElementById('cpuState').innerHTML = 'No executable loaded';
                 document.getElementById('memoryState').innerHTML = 'No executable loaded';
+                document.getElementById('contextMemoryState').innerHTML = 'No context data';
+                document.getElementById('contextMemoryTitle').textContent = 'Context Memory';
+                document.getElementById('contextMemoryAddress').textContent = '';
             }
             
             clearDisplay() {
@@ -748,6 +1079,7 @@
                     logContainer.removeChild(logContainer.firstChild);
                 }
             }
+            
             async refreshStats() {
                 try {
                     const response = await fetch('/stats');
@@ -795,60 +1127,32 @@
                 statsDisplay.innerHTML = html;
                 this.log('Statistics refreshed', 'info');
             }
-            
-            updateDebugInfo(result) {
-                if (!result) return;
-                
-                const cpuState = document.getElementById('cpuState');
-                const memoryState = document.getElementById('memoryState');
-                
-                // Update CPU state (enhanced with mini-stats)
-                let cpuHtml = `
-                    <strong>Program Counter:</strong> 0x${result.cpu.pc.toString(16).padStart(8, '0')}<br>
-                    <strong>Status Register:</strong> 0x${result.cpu.flags ? '----' : '----'}<br>
-                `;
-                
-                // Add mini statistics if available
-                if (result.cpu.stats) {
-                    cpuHtml += `<br><strong>Instructions Executed:</strong> ${result.cpu.stats.totalInstructions}<br>`;
-                    
-                    if (result.cpu.stats.topUnknown && result.cpu.stats.topUnknown.length > 0) {
-                        const topUnknown = result.cpu.stats.topUnknown[0];
-                        cpuHtml += `<strong>Most Common Unknown:</strong> ${topUnknown[0]} (${topUnknown[1]}x)<br>`;
-                    }
-                }
-                
-                cpuHtml += `
-                    <strong>Data Registers:</strong><br>
-                    ${result.cpu.registers.d ? result.cpu.registers.d.map((reg, i) => 
-                        `D${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}<br>
-                    <strong>Address Registers:</strong><br>
-                    ${result.cpu.registers.a ? result.cpu.registers.a.map((reg, i) => 
-                        `A${i}: 0x${reg.toString(16).padStart(8, '0')}`).join('<br>') : 'N/A'}
-                `;
-                
-                cpuState.innerHTML = cpuHtml;
-                
-                // Update memory state (existing code)
-                if (result.memory && result.memory.chipRam) {
-                    let memoryHtml = '<strong>Chip RAM (first 256 bytes):</strong><br>';
-                    for (let i = 0; i < Math.min(256, result.memory.chipRam.length); i += 16) {
-                        const address = i.toString(16).padStart(6, '0');
-                        const bytes = result.memory.chipRam.slice(i, i + 16)
-                            .map(b => b.toString(16).padStart(2, '0'))
-                            .join(' ');
-                        memoryHtml += `${address}: ${bytes}<br>`;
-                    }
-                    memoryState.innerHTML = memoryHtml;
-                } else {
-                    memoryState.innerHTML = 'No memory data available';
-                }
+        }
+
+        // Global functions for memory panel controls
+        let amigaRunner;
+
+        function startMemoryResize(e) {
+            if (amigaRunner) {
+                amigaRunner.startMemoryResize(e);
+            }
+        }
+
+        function toggleMemoryView() {
+            if (amigaRunner) {
+                amigaRunner.toggleMemoryView();
+            }
+        }
+
+        function showMemoryAt() {
+            if (amigaRunner) {
+                amigaRunner.showMemoryAt();
             }
         }
         
         // Initialize the application
         document.addEventListener('DOMContentLoaded', () => {
-            new AmigaRunner();
+            amigaRunner = new AmigaRunner();
         });
     </script>
 </body>

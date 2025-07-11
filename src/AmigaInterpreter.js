@@ -168,6 +168,9 @@ class AmigaInterpreter {
         // Execute one CPU instruction
         const cpuResult = this.cpu.step();
         
+        // *** DEBUG: Log what the CPU returns ***
+        console.log('🔍 [INTERPRETER] CPU step result:', cpuResult);
+        
         // Update custom chips only if still running
         if (this.cpu.isRunning()) {
             this.customChips.copper.update();
@@ -175,6 +178,7 @@ class AmigaInterpreter {
             this.canvas.update();
         }
 
+        // *** CRUCIAL: Make sure ALL cpuResult data is passed through ***
         return {
             cpu: {
                 pc: this.cpu.getProgramCounter(),
@@ -186,11 +190,11 @@ class AmigaInterpreter {
                 running: this.cpu.isRunning(),
                 instruction: cpuResult.instruction,
                 cycles: cpuResult.cycles,
-                // Enhanced debug information from CPU
-                asm: cpuResult.asm,
-                description: cpuResult.description,
-                oldValue: cpuResult.oldValue,
-                newValue: cpuResult.newValue,
+                // *** THESE ARE THE MISSING FIELDS ***
+                asm: cpuResult.asm,                    // ← Must pass this through
+                description: cpuResult.description,    // ← Must pass this through
+                oldValue: cpuResult.oldValue,          // ← Must pass this through
+                newValue: cpuResult.newValue,          // ← Must pass this through (crucial!)
                 target: cpuResult.target,
                 immediate: cpuResult.immediate
             },
@@ -200,7 +204,7 @@ class AmigaInterpreter {
             },
             display: this.canvas.getPixelData()
         };
-    }    
+    }
     // Add method to get detailed statistics
     getDetailedStats() {
         if (!this.cpu) {

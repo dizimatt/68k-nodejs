@@ -313,12 +313,11 @@ const SystemOpcodes = {
         };
     },
     
-    // *** THE MISSING OPCODE 0x43FA ***
     op_lea_d16_pc_a(dstReg) {
         const pc = this.registers.pc - 2;
         const displacement = this.fetchWord();
         const signedDisp = (displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement;
-        const address = (pc + 2 + signedDisp) >>> 0;  // PC + 2 + displacement
+        const address = (pc + 2 + signedDisp) >>> 0;
         const oldValue = this.registers.a[dstReg];
         
         this.registers.a[dstReg] = address;
@@ -328,14 +327,16 @@ const SystemOpcodes = {
         console.log(`       → Calculated: PC(0x${pc.toString(16)}) + 2 + ${signedDisp} = 0x${address.toString(16)}`);
         
         this.cycles += 8;
+        
+        // *** THIS IS THE CRUCIAL PART - MAKE SURE YOU RETURN ALL THIS DATA ***
         return { 
             name: `LEA (${signedDisp},PC),A${dstReg}`, 
             cycles: 8,
-            asm: `LEA (${signedDisp},PC),A${dstReg}`,
-            description: 'Load effective address PC-relative',
+            asm: `LEA (${signedDisp},PC),A${dstReg}`,           // ← MUST have this
+            description: 'Load effective address PC-relative',   // ← MUST have this  
             pc: pc,
-            oldValue: oldValue,
-            newValue: address,
+            oldValue: oldValue,                                  // ← MUST have this
+            newValue: address,                                   // ← MUST have this (triggers context memory!)
             immediate: displacement
         };
     },

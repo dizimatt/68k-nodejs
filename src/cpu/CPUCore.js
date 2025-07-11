@@ -49,28 +49,42 @@ class CPUCore {
     }
     
     // Main execution methods
+
     step() {
         if (!this.running || !this.initialized) {
             return { instruction: 'CPU_STOPPED', cycles: 0, finished: true };
         }
         
         const pc = this.registers.pc;
-        const opcode = this.fetchWord(); // Use this.fetchWord() instead of CPUHelpers.fetchWord()
+        const opcode = this.fetchWord();
         
         const handler = this.opcodeTable[opcode];
         
         if (handler) {
+            // *** This is where the enhanced data comes from ***
             const result = handler();
+            
+            // *** DEBUG: Log what the opcode handler returns ***
+            console.log('🔍 [CPU] Opcode handler result:', result);
+            
             this.instructionCount++;
             this.updateStats(result.name);
-            this.updateSRFromFlags(); // Use this.updateSRFromFlags() instead of CPUHelpers.updateSRFromFlags()
+            this.updateSRFromFlags();
             
+            // *** CRUCIAL: Return ALL the data from the opcode handler ***
             return {
                 instruction: result.name,
                 cycles: result.cycles,
                 finished: false,
                 pc: pc,
-                opcode: opcode
+                opcode: opcode,
+                // *** PASS THROUGH ALL ENHANCED DATA ***
+                asm: result.asm,                    // ← Add this
+                description: result.description,    // ← Add this
+                oldValue: result.oldValue,          // ← Add this
+                newValue: result.newValue,          // ← Add this (crucial!)
+                target: result.target,              // ← Add this
+                immediate: result.immediate         // ← Add this
             };
         } else {
             console.log(`❌ [CPU] Unknown opcode: 0x${opcode.toString(16).padStart(4, '0')} at PC=0x${pc.toString(16)}`);
@@ -82,8 +96,7 @@ class CPUCore {
                 error: true
             };
         }
-    }
-    
+    }    
     run(maxCycles = 10000) {
         let totalCycles = 0;
         

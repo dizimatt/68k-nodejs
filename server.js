@@ -151,6 +151,40 @@ app.get('/stats', (req, res) => {
     }
 });
 
+// Add this endpoint to your server.js
+app.get('/memory', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(400).json({ error: 'No executable loaded' });
+        }
+
+        let address = req.query.address || '0x0';
+        let size = parseInt(req.query.size) || 256;
+        
+        if (typeof address === 'string') {
+            address = parseInt(address.replace('0x', ''), 16);
+        }
+        
+        size = Math.min(size, 1024); // Limit size
+        
+        const memoryData = [];
+        for (let i = 0; i < size; i++) {
+            const byte = interpreter.memory.readByte(address + i);
+            memoryData.push(byte);
+        }
+        
+        res.json({
+            success: true,
+            address: address,
+            size: size,
+            memory: memoryData
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to read memory: ' + error.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Amiga Executable Runner server running on port ${PORT}`);
     console.log(`Open http://localhost:${PORT} to upload and run Amiga executables`);
