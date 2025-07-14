@@ -975,26 +975,26 @@ The emulator will validate ROM files on load and report any issues.
     createExecLibraryStubs() {
         console.log('🔧 [EXEC] Writing pure 68k opcode stubs to ROM area...');
         
-        // Create OpenLibrary stub at 0xF80500
-        this.createOpenLibraryStub(0xF80500);
+        // Create OpenLibrary stub at 0x20000 (RAM space)
+        this.createOpenLibraryStub(0x20000);
         
-        // Create CloseLibrary stub at 0xF80600  
-        this.createCloseLibraryStub(0xF80600);
+        // Create CloseLibrary stub at 0x20100  
+        this.createCloseLibraryStub(0x20100);
         
-        // Create AllocMem stub at 0xF80700
-        this.createAllocMemStub(0xF80700);
+        // Create AllocMem stub at 0x20200
+        this.createAllocMemStub(0x20200);
         
-        // Create FreeMem stub at 0xF80800
-        this.createFreeMemStub(0xF80800);
+        // Create FreeMem stub at 0x20300
+        this.createFreeMemStub(0x20300);
         
-        // Create FindTask stub at 0xF80900
-        this.createFindTaskStub(0xF80900);
+        // Create FindTask stub at 0x20400
+        this.createFindTaskStub(0x20400);
         
-        // Create Permit stub at 0xF80A00
-        this.createPermitStub(0xF80A00);
+        // Create Permit stub at 0x20500
+        this.createPermitStub(0x20500);
         
-        // Create Forbid stub at 0xF80B00
-        this.createForbidStub(0xF80B00);
+        // Create Forbid stub at 0x20600
+        this.createForbidStub(0x20600);
         
         console.log('✅ [EXEC] All exec.library stubs implemented as pure 68k opcodes');
     }
@@ -1006,21 +1006,69 @@ The emulator will validate ROM files on load and report any issues.
         // OpenLibrary(libraryName in A1, version in D0) -> library base in D0
         let offset = 0;
         
-        // For now, create a simple stub that:
-        // 1. Checks if library name matches known libraries
-        // 2. Returns appropriate library base or 0
+        // Enhanced implementation that parses library name from A1
+        // and returns correct library base
         
-        // Simple implementation: Return hardcoded library bases for known libraries
-        // This will be enhanced to actually parse the library name
+        // Check first character of library name to determine which library
+        // CMP.B   #'i',(A1)         ; Check if starts with 'i' (intuition.library)
+        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'i',(A1)  
+        this.writeWord(address + offset, 0x0069); offset += 2;  // immediate value 'i'
         
-        // MOVE.L  #0x11000,D0    ; Return dos.library base (hardcoded for now)
-        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
-        this.writeLong(address + offset, 0x11000); offset += 4;  // dos.library base
+        // BEQ.S   return_intuition  ; Branch if equal to intuition
+        const intuitionBranch = offset;
+        this.writeWord(address + offset, 0x670A); offset += 2;  // BEQ.S +10 bytes
         
+        // CMP.B   #'d',(A1)         ; Check if starts with 'd' (dos.library)
+        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'d',(A1)
+        this.writeWord(address + offset, 0x0064); offset += 2;  // immediate value 'd'
+        
+        // BEQ.S   return_dos        ; Branch if equal to dos
+        const dosBranch = offset;
+        this.writeWord(address + offset, 0x6708); offset += 2;  // BEQ.S +8 bytes
+        
+        // CMP.B   #'g',(A1)         ; Check if starts with 'g' (graphics.library)
+        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'g',(A1)
+        this.writeWord(address + offset, 0x0067); offset += 2;  // immediate value 'g'
+        
+        // BEQ.S   return_graphics   ; Branch if equal to graphics
+        const graphicsBranch = offset;
+        this.writeWord(address + offset, 0x6706); offset += 2;  // BEQ.S +6 bytes
+        
+        // Default: return 0 (library not found)
+        // MOVEQ   #0,D0            ; Return 0 for unknown library
+        this.writeWord(address + offset, 0x7000); offset += 2;  // MOVEQ #0,D0
         // RTS
-        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes`);
+        // return_graphics: MOVE.L #graphics_base,D0
+        const graphicsBase = this.getLibraryBase('graphics.library') || 0x11000;
+        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
+        this.writeLong(address + offset, graphicsBase); offset += 4;
+        this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
+        
+        // return_dos: MOVE.L #dos_base,D0  
+        const dosBase = this.getLibraryBase('dos.library') || 0x10000;
+        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
+        this.writeLong(address + offset, dosBase); offset += 4;
+        this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
+        
+        // return_intuition: MOVE.L #intuition_base,D0
+        const intuitionBase = this.getLibraryBase('intuition.library') || 0x12000;
+        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
+        this.writeLong(address + offset, intuitionBase); offset += 4;
+        this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
+        
+        console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes with name parsing`);
+        console.log(`📍 [STUB] Library bases: intuition=0x${intuitionBase.toString(16)}, dos=0x${dosBase.toString(16)}, graphics=0x${graphicsBase.toString(16)}`);
+        console.log(`🎯 [STUB] Stub created at address 0x${address.toString(16)}`);
+    }
+
+    // *** NEW: Get library base address by name ***
+    getLibraryBase(libraryName) {
+        if (this.libraryBases && this.libraryBases.has(libraryName)) {
+            return this.libraryBases.get(libraryName).baseAddress;
+        }
+        return null;
     }
 
     // *** NEW: CloseLibrary implementation (pure 68k opcodes) ***
@@ -1635,19 +1683,28 @@ The emulator will validate ROM files on load and report any issues.
     createStubVector(jumpAddr, funcName) {
         // Map exec function names to our ROM stub addresses
         const stubMap = {
-            'exec.OpenLibrary': 0xF80500,
-            'exec.CloseLibrary': 0xF80600,
-            'exec.AllocMem': 0xF80700,
-            'exec.FreeMem': 0xF80800,
-            'exec.FindTask': 0xF80900,
-            'exec.Permit': 0xF80A00,
-            'exec.Forbid': 0xF80B00
+            'exec.OpenLibrary': 0x20000,    // Use RAM space instead of ROM
+            'exec.CloseLibrary': 0x20100,
+            'exec.AllocMem': 0x20200,
+            'exec.FreeMem': 0x20300,
+            'exec.FindTask': 0x20400,
+            'exec.Permit': 0x20500,
+            'exec.Forbid': 0x20600
         };
         
         const stubAddr = stubMap[funcName];
         if (stubAddr) {
-            // Create jump vector to our ROM-based stub
+            // Create jump vector to our RAM-based stub  
             this.createJumpVector(jumpAddr, stubAddr, funcName);
+            
+            // Ensure the stub is actually created at the target address
+            if (funcName === 'exec.OpenLibrary') {
+                this.createOpenLibraryStub(stubAddr);
+                // Fix: Manually update the jump vector to point to RAM address
+                this.writeWord(jumpAddr, 0x4EF9);        // JMP absolute.L
+                this.writeLong(jumpAddr + 2, stubAddr);  // 0x20000 
+                console.log(`🔧 [FIX] Updated jump vector at 0x${jumpAddr.toString(16)} to point to RAM stub at 0x${stubAddr.toString(16)}`);
+            }
         } else {
             // Fallback: simple NOP+RTS stub
             this.writeWord(jumpAddr, 0x4E71);     // NOP

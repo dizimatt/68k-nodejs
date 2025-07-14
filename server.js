@@ -188,6 +188,44 @@ app.get('/memory', (req, res) => {
     }
 });
 
+// Debug endpoint to manually fix jump vector
+app.post('/debug/fix-jump-vector', (req, res) => {
+    try {
+        const memory = interpreter.memory;
+        const jumpVectorAddr = 0x1D8;  // OpenLibrary jump vector
+        const targetAddr = 0x20000;    // RAM stub address
+        
+        // Write JMP 0x00020000 instruction
+        memory.writeWord(jumpVectorAddr, 0x4EF9);        // JMP absolute.L
+        memory.writeLong(jumpVectorAddr + 2, targetAddr); // Target 0x20000
+        
+        res.json({
+            success: true,
+            message: 'Jump vector manually fixed',
+            jumpVector: jumpVectorAddr,
+            target: targetAddr,
+            instruction: `JMP $${targetAddr.toString(16).padStart(8, '0')}`
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fix jump vector: ' + error.message });
+    }
+});
+
+// Debug endpoint to create OpenLibrary stub
+app.post('/debug/create-stub', (req, res) => {
+    try {
+        const memory = interpreter.memory;
+        memory.createOpenLibraryStub(0x20000);
+        
+        res.json({
+            success: true,
+            message: 'OpenLibrary stub created at 0x20000'
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create stub: ' + error.message });
+    }
+});
+
 // Debug endpoint to inspect specific addresses
 app.get('/debug/address/:address', (req, res) => {
     try {

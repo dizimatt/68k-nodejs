@@ -18,7 +18,10 @@ const BranchOpcodes = {
             opcodeTable[opcode] = () => this.op_bsr_8.call(cpu, displacement);
         }
         
-        console.log('✅ [CPU] Branch opcodes setup complete');
+        // JMP absolute.L (4EF9)
+        opcodeTable[0x4EF9] = () => this.op_jmp_absolute_l.call(cpu);
+        
+        console.log('✅ [CPU] Branch opcodes setup complete (including JMP)');
     },
     
     // Branch opcode implementations
@@ -66,6 +69,24 @@ const BranchOpcodes = {
         return { 
             name: `BSR $${offset.toString(16)}`, 
             cycles: 18
+        };
+    },
+    
+    op_jmp_absolute_l() {
+        // JMP absolute.L - Jump to absolute long address
+        // Opcode: 4EF9 - followed by 32-bit absolute address
+        
+        // Fetch the 32-bit target address
+        const targetAddress = this.fetchLong();
+        
+        // Jump to the target address
+        this.registers.pc = targetAddress;
+        this.cycles += 12; // JMP absolute.L takes 12 cycles
+        
+        return {
+            name: `JMP $${targetAddress.toString(16).padStart(8, '0')}`,
+            cycles: 12,
+            target: targetAddress
         };
     }
 };
