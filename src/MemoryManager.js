@@ -289,8 +289,18 @@ class MemoryManager {
     loadHunks(hunks) {
         // Initialize basic ExecBase when first executable is loaded
         if (!this.kickstartInitialized) {
+            console.log('⚠️ [EXEC] Kickstart not initialized - use ROM loading first');
             this.initializeKickstart();
         }
+        
+        // FORCE: Setup OpenLibrary stub after executable loading
+        this.writeWord(0x20000, 0x203C);       // MOVE.L #immediate,D0
+        this.writeLong(0x20002, 0x12000);      // Fake intuition.library base
+        this.writeWord(0x20006, 0x4E75);       // RTS
+        
+        this.writeWord(this.execBaseAddr - 552, 0x4EF9);        // JMP absolute.L
+        this.writeLong(this.execBaseAddr - 550, 0x20000);       // Point to our stub
+        console.log(`🔧 [EXEC] OpenLibrary vector forced to point to stub at 0x20000`);
         
         this.hunks = hunks;
         
