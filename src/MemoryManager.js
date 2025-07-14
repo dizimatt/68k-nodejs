@@ -405,8 +405,14 @@ class MemoryManager {
         // this.kickstartRom = null;           ← DON'T do this!
         // this.kickstartInitialized = false; ← DON'T do this!
         
-        // Re-initialize ExecBase if we have hunks
-        if (this.hunks.length > 0 || this.kickstartRom) {
+        // Re-initialize system properly
+        if (this.kickstartRom) {
+            // ROM is loaded - do full ROM initialization
+            console.log('🔧 [MEMORY] ROM detected - performing full ROM re-initialization...');
+            this.parseKickstartROM();
+            this.initializeExecBaseFromROM();
+        } else if (this.hunks.length > 0) {
+            // No ROM but hunks exist - basic initialization
             this.initializeKickstart();
             
             // Reload hunks if they exist
@@ -882,19 +888,256 @@ The emulator will validate ROM files on load and report any issues.
         }
     }
 
-    // *** NEW: Extract library vectors from ROM data ***
+    // *** ENHANCED: Extract library vectors from ROM data ***
     extractLibraryVectors(resident) {
-        // This is a simplified vector extraction
-        // Real Amiga libraries use MakeLibrary() and complex initialization
+        console.log(`🔍 [VECTOR] Extracting vectors for ${resident.name}...`);
+        
+        const vectors = [];
+        const initAddr = resident.initPtr;
+        
+        // Special handling for exec.library - it's built into the ROM differently
+        if (resident.name.toLowerCase().includes('exec')) {
+            return this.extractExecLibraryVectors();
+        }
+        
+        // For other libraries, look for standard patterns
+        const searchRange = 2048; // Increased search range
+        
+        console.log(`🔍 [VECTOR] Searching around init address 0x${initAddr.toString(16)}`);
+        
+        // Pattern 1: Look for jump table (series of JMP instructions)
+        let jumpVectors = this.findJumpTable(initAddr, searchRange);
+        if (jumpVectors.length > 0) {
+            vectors.push(...jumpVectors);
+            console.log(`✅ [VECTOR] Found ${jumpVectors.length} jump vectors`);
+        }
+        
+        // Pattern 2: Look for function address tables
+        if (vectors.length === 0) {
+            let addressVectors = this.findFunctionAddressTable(resident);
+            if (addressVectors.length > 0) {
+                vectors.push(...addressVectors);
+                console.log(`✅ [VECTOR] Found ${addressVectors.length} address table vectors`);
+            }
+        }
+        
+        // Pattern 3: Look for library initialization tables
+        if (vectors.length === 0) {
+            let initVectors = this.findLibraryInitTable(resident);
+            if (initVectors.length > 0) {
+                vectors.push(...initVectors);
+                console.log(`✅ [VECTOR] Found ${initVectors.length} init table vectors`);
+            }
+        }
+        
+        if (vectors.length === 0) {
+            console.warn(`⚠️ [VECTOR] No vectors found for ${resident.name}`);
+        }
+        
+        return vectors;
+    }
+
+    // *** ENHANCED: Extract exec.library vectors and create stub implementations ***
+    extractExecLibraryVectors() {
+        console.log('🔧 [EXEC] Creating exec.library vectors with pure 68k opcode stubs...');
         
         const vectors = [];
         
-        // Look for vector table patterns near the initialization code
-        const initAddr = resident.initPtr;
-        const searchRange = 1024; // Search 1KB around init address
+        // Define exec functions with their stub implementations
+        const execFunctions = [
+            { name: 'OpenLibrary', stubAddr: 0xF80500 },
+            { name: 'CloseLibrary', stubAddr: 0xF80600 },
+            { name: 'AllocMem', stubAddr: 0xF80700 },
+            { name: 'FreeMem', stubAddr: 0xF80800 },
+            { name: 'FindTask', stubAddr: 0xF80900 },
+            { name: 'Permit', stubAddr: 0xF80A00 },
+            { name: 'Forbid', stubAddr: 0xF80B00 }
+        ];
         
-        // Pattern 1: Look for jump table (series of JMP instructions)
-        for (let addr = initAddr; addr < initAddr + searchRange && this.isValidROMPointer(addr); addr += 2) {
+        // Create vectors pointing to our stub implementations
+        execFunctions.forEach((func, index) => {
+            vectors.push({
+                address: func.stubAddr,
+                jumpAddress: null,
+                offset: this.getStandardExecOffset(func.name),
+                name: func.name
+            });
+        });
+        
+        // Create the actual stub implementations
+        this.createExecLibraryStubs();
+        
+        console.log(`✅ [EXEC] Created ${vectors.length} exec.library vectors with opcode stubs`);
+        return vectors;
+    }
+
+    // *** NEW: Create pure 68k opcode stubs for exec.library functions ***
+    createExecLibraryStubs() {
+        console.log('🔧 [EXEC] Writing pure 68k opcode stubs to ROM area...');
+        
+        // Create OpenLibrary stub at 0xF80500
+        this.createOpenLibraryStub(0xF80500);
+        
+        // Create CloseLibrary stub at 0xF80600  
+        this.createCloseLibraryStub(0xF80600);
+        
+        // Create AllocMem stub at 0xF80700
+        this.createAllocMemStub(0xF80700);
+        
+        // Create FreeMem stub at 0xF80800
+        this.createFreeMemStub(0xF80800);
+        
+        // Create FindTask stub at 0xF80900
+        this.createFindTaskStub(0xF80900);
+        
+        // Create Permit stub at 0xF80A00
+        this.createPermitStub(0xF80A00);
+        
+        // Create Forbid stub at 0xF80B00
+        this.createForbidStub(0xF80B00);
+        
+        console.log('✅ [EXEC] All exec.library stubs implemented as pure 68k opcodes');
+    }
+
+    // *** NEW: OpenLibrary implementation (pure 68k opcodes) ***
+    createOpenLibraryStub(address) {
+        console.log(`🔧 [STUB] Creating OpenLibrary stub at 0x${address.toString(16)}`);
+        
+        // OpenLibrary(libraryName in A1, version in D0) -> library base in D0
+        let offset = 0;
+        
+        // For now, create a simple stub that:
+        // 1. Checks if library name matches known libraries
+        // 2. Returns appropriate library base or 0
+        
+        // Simple implementation: Return hardcoded library bases for known libraries
+        // This will be enhanced to actually parse the library name
+        
+        // MOVE.L  #0x11000,D0    ; Return dos.library base (hardcoded for now)
+        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
+        this.writeLong(address + offset, 0x11000); offset += 4;  // dos.library base
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: CloseLibrary implementation (pure 68k opcodes) ***
+    createCloseLibraryStub(address) {
+        console.log(`🔧 [STUB] Creating CloseLibrary stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // CloseLibrary(library base in A1) -> void
+        // Simple implementation: just return
+        
+        // MOVEQ   #0,D0          ; Return success
+        this.writeWord(address + offset, 0x7000); offset += 2;   // MOVEQ #0,D0
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] CloseLibrary stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: AllocMem implementation (pure 68k opcodes) ***
+    createAllocMemStub(address) {
+        console.log(`🔧 [STUB] Creating AllocMem stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // AllocMem(size in D0, flags in D1) -> memory pointer in D0
+        // Simple implementation: return a fake memory address
+        
+        // MOVE.L  #0x50000,D0    ; Return fake memory address
+        this.writeWord(address + offset, 0x203C); offset += 2;   // MOVE.L #imm,D0
+        this.writeLong(address + offset, 0x50000); offset += 4;   // Fake address
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;    // RTS
+        
+        console.log(`✅ [STUB] AllocMem stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: FreeMem implementation (pure 68k opcodes) ***
+    createFreeMemStub(address) {
+        console.log(`🔧 [STUB] Creating FreeMem stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // FreeMem(memory in A1, size in D0) -> void
+        // Simple implementation: just return
+        
+        // MOVEQ   #0,D0          ; Return success
+        this.writeWord(address + offset, 0x7000); offset += 2;   // MOVEQ #0,D0
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] FreeMem stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: FindTask implementation (pure 68k opcodes) ***
+    createFindTaskStub(address) {
+        console.log(`🔧 [STUB] Creating FindTask stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // FindTask(task name in A1, or NULL for current) -> task pointer in D0
+        // Simple implementation: return fake current task
+        
+        // MOVE.L  #0x1000,D0     ; Return fake task address
+        this.writeWord(address + offset, 0x203C); offset += 2;   // MOVE.L #imm,D0
+        this.writeLong(address + offset, 0x1000); offset += 4;    // Fake task
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;    // RTS
+        
+        console.log(`✅ [STUB] FindTask stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: Permit implementation (pure 68k opcodes) ***
+    createPermitStub(address) {
+        console.log(`🔧 [STUB] Creating Permit stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // Permit() -> void (re-enable task switching)
+        // Simple implementation: just return
+        
+        // NOP                    ; Placeholder for permit functionality
+        this.writeWord(address + offset, 0x4E71); offset += 2;   // NOP
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] Permit stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: Forbid implementation (pure 68k opcodes) ***
+    createForbidStub(address) {
+        console.log(`🔧 [STUB] Creating Forbid stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // Forbid() -> void (disable task switching)
+        // Simple implementation: just return
+        
+        // NOP                    ; Placeholder for forbid functionality
+        this.writeWord(address + offset, 0x4E71); offset += 2;   // NOP
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] Forbid stub: ${offset} bytes of 68k opcodes`);
+    }
+
+    // *** NEW: Find jump table pattern ***
+    findJumpTable(startAddr, searchRange) {
+        const vectors = [];
+        
+        for (let addr = startAddr; addr < startAddr + searchRange && this.isValidROMPointer(addr); addr += 2) {
             const instruction = this.readWord(addr);
             
             // JMP absolute.L = 0x4EF9
@@ -906,15 +1149,79 @@ The emulator will validate ROM files on load and report any issues.
                         address: targetAddr,
                         jumpAddress: addr,
                         offset: vectors.length * -6, // Standard negative offset
-                        name: this.guessVectorName(resident.name, vectors.length)
+                        name: `Func${vectors.length}`
                     });
+                    
+                    // Look for consecutive jump instructions
+                    let nextAddr = addr + 6;
+                    while (this.isValidROMPointer(nextAddr) && this.readWord(nextAddr) === 0x4EF9) {
+                        const nextTarget = this.readLong(nextAddr + 2);
+                        if (this.isValidROMPointer(nextTarget)) {
+                            vectors.push({
+                                address: nextTarget,
+                                jumpAddress: nextAddr,
+                                offset: vectors.length * -6,
+                                name: `Func${vectors.length}`
+                            });
+                            nextAddr += 6;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    if (vectors.length > 0) {
+                        break; // Found a jump table
+                    }
                 }
             }
         }
         
-        // Pattern 2: Look for function address tables
-        if (vectors.length === 0) {
-            vectors.push(...this.findFunctionAddressTable(resident));
+        return vectors;
+    }
+
+    // *** NEW: Find library initialization table ***
+    findLibraryInitTable(resident) {
+        const vectors = [];
+        const initAddr = resident.initPtr;
+        
+        // Look for patterns common in Amiga library initialization
+        // Many libraries have a structure like:
+        // InitLib: 
+        //   dc.l LibName
+        //   dc.l LibId  
+        //   dc.l LibBase
+        //   dc.l FuncTable
+        
+        for (let addr = initAddr; addr < initAddr + 256 && this.isValidROMPointer(addr); addr += 4) {
+            const ptr1 = this.readLong(addr);
+            const ptr2 = this.readLong(addr + 4);
+            const ptr3 = this.readLong(addr + 8);
+            const ptr4 = this.readLong(addr + 12);
+            
+            // Check if this looks like a function table pointer
+            if (this.isValidROMPointer(ptr4)) {
+                // Check if ptr4 points to a table of ROM addresses
+                let funcCount = 0;
+                for (let i = 0; i < 50; i++) { // Check up to 50 functions
+                    const funcAddr = this.readLong(ptr4 + (i * 4));
+                    if (this.isValidROMPointer(funcAddr)) {
+                        vectors.push({
+                            address: funcAddr,
+                            tableAddress: ptr4 + (i * 4),
+                            offset: i * -6,
+                            name: `Func${i}`
+                        });
+                        funcCount++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (funcCount > 3) { // If we found a reasonable number of functions
+                    console.log(`📋 [VECTOR] Found function table at 0x${ptr4.toString(16)} with ${funcCount} functions`);
+                    break;
+                }
+            }
         }
         
         return vectors;
@@ -1206,19 +1513,449 @@ The emulator will validate ROM files on load and report any issues.
         }
     }
     
-    // *** PLACEHOLDER: Initialize ExecBase from ROM data ***
+    // *** ENHANCED: Initialize ExecBase from ROM data with jump vectors ***
     initializeExecBaseFromROM() {
         console.log('🔧 [KICKSTART] Initializing ExecBase from ROM data...');
         
-        // For now, use our existing ExecBase initialization
-        // Later this will be enhanced to use actual ROM structures
+        // Initialize basic ExecBase structure
         this.initializeExecBase();
         
+        // *** NEW: Initialize library jump vectors ***
+        this.initializeLibraryJumpVectors();
+        
         // TODO: Parse actual ExecBase structure from ROM
-        // TODO: Set up real library jump tables from ROM
         // TODO: Initialize memory lists from ROM
         
-        console.log('✅ [KICKSTART] ExecBase initialized from ROM');
+        console.log('✅ [KICKSTART] ExecBase initialized from ROM with jump vectors');
+    }
+
+    // *** NEW: Initialize library jump vectors from discovered ROM addresses ***
+    initializeLibraryJumpVectors() {
+        console.log('🔧 [VECTORS] Initializing library jump vectors...');
+        
+        if (!this.execBaseAddr) {
+            console.warn('⚠️ [VECTORS] ExecBase not initialized - cannot create jump vectors');
+            return;
+        }
+        
+        // Initialize exec.library jump vectors (negative offsets from ExecBase)
+        this.initializeExecLibraryVectors();
+        
+        // Initialize other system library vectors
+        this.initializeSystemLibraryVectors();
+        
+        console.log('✅ [VECTORS] Library jump vectors initialized');
+    }
+
+    // *** NEW: Initialize exec.library jump vectors ***
+    initializeExecLibraryVectors() {
+        console.log('🔧 [EXEC] Setting up exec.library jump vectors...');
+        
+        const execBase = this.execBaseAddr;
+        
+        // Find exec.library from resident modules
+        const execLibrary = this.systemLibraries?.exec;
+        if (!execLibrary || !execLibrary.vectorTable) {
+            console.warn('⚠️ [EXEC] exec.library vectors not found - using stub implementations');
+            this.createExecLibraryStubs();
+            return;
+        }
+        
+        console.log(`📋 [EXEC] Found ${execLibrary.vectorTable.length} exec.library vectors`);
+        
+        // Map exec function offsets to ROM addresses
+        const execVectorMap = new Map();
+        
+        // Create mapping from known function names to ROM addresses
+        execLibrary.vectorTable.forEach((vector, index) => {
+            const funcName = vector.name;
+            if (funcName) {
+                // Map common exec functions to their standard offsets
+                const standardOffset = this.getStandardExecOffset(funcName);
+                if (standardOffset) {
+                    execVectorMap.set(standardOffset, vector.address);
+                    console.log(`📍 [EXEC] ${funcName}: offset ${standardOffset} → ROM 0x${vector.address.toString(16)}`);
+                }
+            }
+        });
+        
+        // Create jump vectors for known exec functions
+        let vectorsCreated = 0;
+        for (const [funcName, offset] of Object.entries(this.EXEC_FUNCTIONS)) {
+            const romAddress = execVectorMap.get(offset);
+            if (romAddress) {
+                const jumpTableAddr = execBase + offset; // Note: offset is negative
+                this.createJumpVector(jumpTableAddr, romAddress, `exec.${funcName}`);
+                vectorsCreated++;
+            } else {
+                console.warn(`⚠️ [EXEC] No ROM address found for ${funcName} (offset ${offset})`);
+                // Create stub for missing function
+                this.createStubVector(execBase + offset, `exec.${funcName}`);
+            }
+        }
+        
+        console.log(`✅ [EXEC] Created ${vectorsCreated} exec.library jump vectors`);
+    }
+
+    // *** NEW: Get standard exec function offset by name ***
+    getStandardExecOffset(funcName) {
+        const nameMap = {
+            'OpenLibrary': -552,
+            'CloseLibrary': -414,
+            'AllocMem': -198,
+            'FreeMem': -210,
+            'FindTask': -294,
+            'Permit': -138,
+            'Forbid': -132
+        };
+        
+        return nameMap[funcName] || null;
+    }
+
+    // *** NEW: Create jump vector (JMP absolute.L instruction) ***
+    createJumpVector(jumpAddr, targetAddr, funcName) {
+        // Write JMP absolute.L instruction (0x4EF9) followed by 32-bit target address
+        this.writeWord(jumpAddr, 0x4EF9);        // JMP absolute.L opcode
+        this.writeLong(jumpAddr + 2, targetAddr); // Target address
+        
+        console.log(`🎯 [VECTOR] ${funcName}: 0x${jumpAddr.toString(16)} → JMP 0x${targetAddr.toString(16)}`);
+        
+        // Verify the jump vector was written correctly
+        const writtenOpcode = this.readWord(jumpAddr);
+        const writtenTarget = this.readLong(jumpAddr + 2);
+        
+        if (writtenOpcode !== 0x4EF9 || writtenTarget !== targetAddr) {
+            console.error(`❌ [VECTOR] Failed to write jump vector for ${funcName}`);
+            console.error(`   Expected: 0x4EF9 0x${targetAddr.toString(16)}`);
+            console.error(`   Written:  0x${writtenOpcode.toString(16)} 0x${writtenTarget.toString(16)}`);
+        }
+    }
+
+    // *** NEW: Create stub vector for missing functions ***
+    createStubVector(jumpAddr, funcName) {
+        // Map exec function names to our ROM stub addresses
+        const stubMap = {
+            'exec.OpenLibrary': 0xF80500,
+            'exec.CloseLibrary': 0xF80600,
+            'exec.AllocMem': 0xF80700,
+            'exec.FreeMem': 0xF80800,
+            'exec.FindTask': 0xF80900,
+            'exec.Permit': 0xF80A00,
+            'exec.Forbid': 0xF80B00
+        };
+        
+        const stubAddr = stubMap[funcName];
+        if (stubAddr) {
+            // Create jump vector to our ROM-based stub
+            this.createJumpVector(jumpAddr, stubAddr, funcName);
+        } else {
+            // Fallback: simple NOP+RTS stub
+            this.writeWord(jumpAddr, 0x4E71);     // NOP
+            this.writeWord(jumpAddr + 2, 0x4E75); // RTS
+            this.writeWord(jumpAddr + 4, 0x4E71); // NOP (padding)
+            console.log(`🔧 [STUB] ${funcName}: 0x${jumpAddr.toString(16)} → STUB (NOP+RTS)`);
+        }
+    }
+
+    // *** NEW: Create exec.library stubs when ROM vectors not available ***
+    createExecLibraryStubs() {
+        console.log('🔧 [EXEC] Creating exec.library stubs (ROM vectors not available)...');
+        
+        const execBase = this.execBaseAddr;
+        let stubsCreated = 0;
+        
+        for (const [funcName, offset] of Object.entries(this.EXEC_FUNCTIONS)) {
+            const jumpTableAddr = execBase + offset; // Note: offset is negative
+            this.createStubVector(jumpTableAddr, `exec.${funcName}`);
+            stubsCreated++;
+        }
+        
+        console.log(`✅ [EXEC] Created ${stubsCreated} exec.library stubs`);
+    }
+
+    // *** ENHANCED: Initialize ALL system library vectors ***
+    initializeSystemLibraryVectors() {
+        console.log('🔧 [SYSTEM] Setting up ALL system library vectors...');
+        
+        // Initialize library base tracking
+        this.libraryBases = new Map();
+        this.nextLibraryBase = 0x00010000; // Start allocating library bases at 64KB
+        
+        // Create library bases and jump vectors for all discovered libraries
+        let librariesProcessed = 0;
+        
+        for (const resident of this.residentModules) {
+            if (resident.isLibrary && resident.vectorTable && resident.vectorTable.length > 0) {
+                console.log(`🔧 [LIBRARY] Creating library base for ${resident.name}...`);
+                
+                // Skip exec.library (already handled)
+                if (resident.name.toLowerCase().includes('exec')) {
+                    continue;
+                }
+                
+                // Create library base structure
+                const libraryBase = this.createLibraryBase(resident);
+                
+                if (libraryBase) {
+                    // Create jump vectors for this library
+                    this.createLibraryJumpVectors(resident, libraryBase);
+                    librariesProcessed++;
+                }
+            }
+        }
+        
+        console.log(`✅ [SYSTEM] Created jump vectors for ${librariesProcessed} system libraries`);
+        
+        // Debug: Show all library bases
+        this.debugLibraryBases();
+    }
+
+    // *** NEW: Create library base structure ***
+    createLibraryBase(resident) {
+        const libraryBase = this.nextLibraryBase;
+        this.nextLibraryBase += 0x1000; // 4KB spacing between library bases
+        
+        console.log(`📍 [LIBRARY] Creating ${resident.name} base at 0x${libraryBase.toString(16)}`);
+        
+        // Create standard Amiga library structure
+        this.setupLibraryStructure(libraryBase, resident);
+        
+        // Store library base mapping
+        this.libraryBases.set(resident.name, {
+            baseAddress: libraryBase,
+            resident: resident,
+            vectorCount: resident.vectorTable.length,
+            isOpen: false
+        });
+        
+        return libraryBase;
+    }
+
+    // *** NEW: Setup standard Amiga library structure ***
+    setupLibraryStructure(baseAddr, resident) {
+        // === LN (List Node) structure - 14 bytes ===
+        this.writeLong(baseAddr + 0, 0);        // ln_Succ
+        this.writeLong(baseAddr + 4, 0);        // ln_Pred  
+        this.writeByte(baseAddr + 8, 9);        // ln_Type (NT_LIBRARY = 9)
+        this.writeByte(baseAddr + 9, 0);        // ln_Pri
+        this.writeLong(baseAddr + 10, 0);       // ln_Name
+        
+        // === LIB (Library) structure - 20 bytes ===
+        this.writeWord(baseAddr + 14, 0x0105);  // lib_Flags
+        this.writeWord(baseAddr + 16, 0);       // lib_pad
+        this.writeWord(baseAddr + 18, resident.vectorTable.length * 6); // lib_NegSize
+        this.writeWord(baseAddr + 20, 100);     // lib_PosSize  
+        this.writeWord(baseAddr + 22, resident.version); // lib_Version
+        this.writeWord(baseAddr + 24, 1);       // lib_Revision
+        this.writeLong(baseAddr + 26, 0);       // lib_IdString
+        this.writeLong(baseAddr + 30, 0);       // lib_Sum
+        this.writeWord(baseAddr + 34, 0);       // lib_OpenCnt
+        
+        console.log(`📋 [LIBRARY] ${resident.name} structure created (${resident.vectorTable.length} vectors)`);
+    }
+
+    // *** NEW: Create jump vectors for a library ***
+    createLibraryJumpVectors(resident, libraryBase) {
+        console.log(`🎯 [VECTORS] Creating jump vectors for ${resident.name}...`);
+        
+        let vectorsCreated = 0;
+        
+        // Create jump vectors at negative offsets from library base
+        resident.vectorTable.forEach((vector, index) => {
+            // Standard Amiga negative offset: -6 * (index + 1)
+            const offset = -6 * (index + 1);
+            const jumpAddr = libraryBase + offset;
+            
+            // Create JMP instruction pointing to ROM function
+            this.createJumpVector(jumpAddr, vector.address, `${resident.name}.${vector.name || `Func${index}`}`);
+            vectorsCreated++;
+            
+            // Update vector with jump address for reference
+            vector.jumpAddress = jumpAddr;
+            vector.offset = offset;
+        });
+        
+        console.log(`✅ [VECTORS] Created ${vectorsCreated} jump vectors for ${resident.name}`);
+        
+        // Add standard library functions (Open, Close, Expunge, Reserved)
+        this.addStandardLibraryVectors(resident, libraryBase);
+    }
+
+    // *** NEW: Add standard library vectors (Open, Close, Expunge, Reserved) ***
+    addStandardLibraryVectors(resident, libraryBase) {
+        // Every Amiga library has these 4 standard functions at the beginning
+        const standardVectors = [
+            { offset: -6, name: 'Open', stubType: 'return_self' },
+            { offset: -12, name: 'Close', stubType: 'return_null' },
+            { offset: -18, name: 'Expunge', stubType: 'return_null' },
+            { offset: -24, name: 'Reserved', stubType: 'return_null' }
+        ];
+        
+        standardVectors.forEach(stdVector => {
+            const jumpAddr = libraryBase + stdVector.offset;
+            
+            // Create appropriate stub for standard functions
+            if (stdVector.stubType === 'return_self') {
+                // Open() should return the library base in D0
+                this.writeWord(jumpAddr, 0x2008);     // MOVE.L A0,D0 (return library base)
+                this.writeWord(jumpAddr + 2, 0x4E75); // RTS
+                this.writeWord(jumpAddr + 4, 0x4E71); // NOP (padding)
+            } else {
+                // Close/Expunge/Reserved return NULL
+                this.writeWord(jumpAddr, 0x7000);     // MOVEQ #0,D0 (return NULL)
+                this.writeWord(jumpAddr + 2, 0x4E75); // RTS
+                this.writeWord(jumpAddr + 4, 0x4E71); // NOP (padding)
+            }
+            
+            console.log(`🔧 [STD] ${resident.name}.${stdVector.name}: 0x${jumpAddr.toString(16)} → STUB`);
+        });
+    }
+
+    // *** NEW: Debug library bases ***
+    debugLibraryBases() {
+        console.log('\n📚 [LIBRARY BASES] Summary:');
+        
+        for (const [libName, libInfo] of this.libraryBases) {
+            console.log(`  📍 ${libName}:`);
+            console.log(`      Base: 0x${libInfo.baseAddress.toString(16)}`);
+            console.log(`      Vectors: ${libInfo.vectorCount}`);
+            console.log(`      Version: ${libInfo.resident.version}`);
+            
+            // Show first few vectors
+            const vectors = libInfo.resident.vectorTable.slice(0, 3);
+            vectors.forEach(vector => {
+                if (vector.jumpAddress) {
+                    console.log(`      ${vector.name}: 0x${vector.jumpAddress.toString(16)} → 0x${vector.address.toString(16)}`);
+                }
+            });
+            if (libInfo.vectorCount > 3) {
+                console.log(`      ... and ${libInfo.vectorCount - 3} more vectors`);
+            }
+        }
+        console.log('');
+    }
+
+    // *** NEW: OpenLibrary implementation ***
+    openLibrary(libraryName, version = 0) {
+        console.log(`📚 [OPEN] OpenLibrary("${libraryName}", ${version})`);
+        
+        // Find library by name (case-insensitive partial match)
+        const normalizedName = libraryName.toLowerCase();
+        
+        for (const [libName, libInfo] of this.libraryBases) {
+            if (libName.toLowerCase().includes(normalizedName) || 
+                normalizedName.includes(libName.toLowerCase().replace('.library', ''))) {
+                
+                console.log(`✅ [OPEN] Found ${libName} at base 0x${libInfo.baseAddress.toString(16)}`);
+                
+                // Mark library as open
+                libInfo.isOpen = true;
+                
+                // Return library base address
+                return libInfo.baseAddress;
+            }
+        }
+        
+        // Special handling for common library name variations
+        const libraryAliases = {
+            'dos': 'dos.library',
+            'graphics': 'graphics.library',  
+            'intuition': 'intuition.library',
+            'gadtools': 'gadtools.library',
+            'workbench': 'workbench.library',
+            'icon': 'icon.library',
+            'layers': 'layers.library',
+            'utility': 'utility.library',
+            'expansion': 'expansion.library'
+        };
+        
+        const aliasName = libraryAliases[normalizedName];
+        if (aliasName) {
+            return this.openLibrary(aliasName, version);
+        }
+        
+        console.warn(`⚠️ [OPEN] Library "${libraryName}" not found`);
+        return 0; // NULL - library not found
+    }
+
+    // *** NEW: CloseLibrary implementation ***
+    closeLibrary(libraryBase) {
+        console.log(`📚 [CLOSE] CloseLibrary(0x${libraryBase.toString(16)})`);
+        
+        // Find library by base address
+        for (const [libName, libInfo] of this.libraryBases) {
+            if (libInfo.baseAddress === libraryBase) {
+                console.log(`✅ [CLOSE] Closing ${libName}`);
+                libInfo.isOpen = false;
+                return;
+            }
+        }
+        
+        console.warn(`⚠️ [CLOSE] Library base 0x${libraryBase.toString(16)} not found`);
+    }
+
+    // *** NEW: Get library info by base address ***
+    getLibraryInfo(baseAddress) {
+        for (const [libName, libInfo] of this.libraryBases) {
+            if (libInfo.baseAddress === baseAddress) {
+                return {
+                    name: libName,
+                    base: baseAddress,
+                    version: libInfo.resident.version,
+                    vectorCount: libInfo.vectorCount,
+                    isOpen: libInfo.isOpen
+                };
+            }
+        }
+        return null;
+    }
+
+    // *** NEW: Read library name string from memory ***
+    readLibraryNameString(address) {
+        let name = '';
+        for (let i = 0; i < 64; i++) {
+            const byte = this.readByte(address + i);
+            if (byte === 0) break; // Null terminator
+            if (byte >= 32 && byte <= 126) { // Printable ASCII
+                name += String.fromCharCode(byte);
+            } else {
+                break; // Invalid character
+            }
+        }
+        return name;
+    }
+
+    // *** NEW: Check if address is a library function call ***
+    isLibraryFunctionCall(address) {
+        // Check if this address is in any library's negative offset range
+        for (const [libName, libInfo] of this.libraryBases) {
+            const baseAddr = libInfo.baseAddress;
+            const negativeRange = libInfo.vectorCount * 6;
+            
+            if (address >= baseAddr - negativeRange && address < baseAddr) {
+                return {
+                    library: libName,
+                    base: baseAddr,
+                    offset: address - baseAddr,
+                    vectorIndex: Math.floor((baseAddr - address) / 6) - 1
+                };
+            }
+        }
+        
+        // Check exec.library (ExecBase)
+        if (this.execBaseAddr) {
+            const execBase = this.execBaseAddr;
+            if (address >= execBase - 552 && address < execBase) {
+                return {
+                    library: 'exec.library',
+                    base: execBase,
+                    offset: address - execBase,
+                    vectorIndex: Math.floor((execBase - address) / 6) - 1
+                };
+            }
+        }
+        
+        return null;
     }
     
     // *** NEW: Get current ROM status ***

@@ -43,8 +43,8 @@ app.post('/upload', upload.single('executable'), (req, res) => {
 
         console.log(`Received file: ${req.file.originalname}, size: ${req.file.buffer.length} bytes`);
 
-        // Create new interpreter instance
-        interpreter = new AmigaInterpreter();
+        // Reset existing interpreter (preserves ROM if loaded)
+        interpreter.reset();
         
         // Load and validate the executable
         const result = interpreter.loadExecutable(req.file.buffer);
@@ -187,6 +187,56 @@ app.get('/memory', (req, res) => {
         res.status(500).json({ error: 'Failed to read memory: ' + error.message });
     }
 });
+
+// Debug endpoint to inspect specific addresses
+app.get('/debug/address/:address', (req, res) => {
+    try {
+        const address = parseInt(req.params.address, 16);
+        const memory = interpreter.memory;
+        
+        // Read 16 bytes starting from address
+        const data = [];
+        for (let i = 0; i < 16; i++) {
+            data.push(memory.readByte(address + i));
+        }
+        
+        // Also check if this is a known jump vector
+        const execBase = memory.execBaseAddr || 0;
+        const isJumpVector = address >= execBase - 552 && address < execBase;
+        
+        res.json({
+            success: true,
+            address: address,
+            addressHex: `0x${address.toString(16)}`,
+            data: data,
+            dataHex: data.map(b => `0x${b.toString(16).padStart(2, '0')}`),
+            execBase: execBase,
+            isJumpVector: isJumpVector,
+            interpretation: interpretBytes(data)
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to debug address: ' + error.message });
+    }
+});
+
+function interpretBytes(data) {
+    if (data.length >= 6) {
+        const word1 = (data[0] << 8) | data[1];
+        const long1 = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
+        
+        if (word1 === 0x4EF9) {
+            return `JMP $${long1.toString(16).padStart(8, '0')}`;
+        } else if (word1 === 0x4E71 && ((data[2] << 8) | data[3]) === 0x4E75) {
+            return "NOP; RTS (stub)";
+        }
+    }
+    
+    if (data.every(b => b === 0)) {
+        return "Empty/uninitialized";
+    }
+    
+    return "Unknown";
+}
 
 // kickstart rom functions...
 // Add these endpoints to your server.js
