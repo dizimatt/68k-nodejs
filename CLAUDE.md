@@ -10,16 +10,16 @@ This project is a **Node.js-based Amiga A1200 emulator** that executes 68k machi
 - Complete 68000/68020 CPU emulation
 - Amiga custom chipset emulation (Blitter, Copper, AGA)
 - Memory management (Chip RAM, Fast RAM, Custom registers)
-- **Kickstart 3.1 ROM integration with pure 68k library implementations**
+- **Kickstart 3.1 ROM integration with library vector initialization**
 - Amiga Hunk executable format loading
 
-**Frontend (HTML5/JavaScript):**
+**Frontend (HTML5/JavaScript → WebAssembly):**
 - Web-based control interface with intuitive layout
 - HTML5 Canvas for authentic Amiga display output
 - Context-aware debugging with split memory panels
 - Real-time system inspection and instruction tracing
 - File upload for Amiga executables
-- Enhanced UI layout: Upload → Display → Debug Information → Controls
+- **WebAssembly execution for scalable multi-client performance**
 
 **Display Pipeline:**
 ```
@@ -36,17 +36,17 @@ amiga-executable-runner/
 │   ├── AmigaInterpreter.js      # Main emulator orchestrator (enhanced)
 │   ├── HunkLoader.js            # Amiga executable parser
 │   ├── MemoryManager.js         # Memory management system (enhanced with Kickstart support)
-│   ├── MusashiInspiredCPU.js    # NEW: Main CPU entry point (Pure JS)
+│   ├── MusashiInspiredCPU.js    # Main CPU entry point (Pure JS)
 │   ├── SimpleCPU.js             # BACKUP: Original basic CPU implementation
 │   ├── BlitterChip.js           # Placeholder blitter emulation
 │   ├── CopperChip.js            # Placeholder copper emulation
 │   ├── VirtualCanvas.js         # Basic display buffer
-│   └── cpu/                     # NEW: CPU Architecture Directory
+│   └── cpu/                     # CPU Architecture Directory
 │       ├── CPUCore.js           # Main CPU class and state management
 │       ├── CPUHelpers.js        # CPU helper functions
 │       ├── CPUInterface.js      # Public interface methods
 │       ├── OpcodeTable.js       # Opcode table setup and routing
-│       └── opcodes/             # NEW: Opcode Implementation Directory
+│       └── opcodes/             # Opcode Implementation Directory
 │           ├── ArithmeticOpcodes.js    # ADD, SUB, MUL, DIV operations
 │           ├── BasicOpcodes.js         # NOP, RTS, and basic operations
 │           ├── BranchOpcodes.js        # Branch and jump operations
@@ -131,49 +131,115 @@ amiga-executable-runner/
 - ✅ **Context-Aware Debugging**: Real-time memory inspection with automatic context updates
 - ✅ **Complete Addressing Mode Support**: All major 68k addressing modes implemented
 
-#### 2.2 Kickstart 3.1 ROM Integration with Pure 68k Library Implementations 🚀 **NEXT PHASE**
-**Status: PLANNING AND DESIGN**
+#### 2.2 Kickstart 3.1 ROM Integration ✅ **COMPLETED**
+**Status: IMPLEMENTED - ROM LOADING AND PARSING COMPLETE**
 
-- [ ] **Kickstart 3.1 ROM Loading** (Enhanced MemoryManager.js)
+- [x] **Kickstart 3.1 ROM Loading** (Enhanced MemoryManager.js)
   - Load actual Kickstart 3.1 ROM file into memory at 0x00F80000
   - Parse ROM resident structures and library headers
   - Extract ExecBase, library bases, and function tables from ROM
   - Validate ROM integrity and version compatibility (A1200 specific)
 
-- [ ] **Pure 68k Library Code Generation** (KickstartInjector.js)
-  - Generate authentic 68k machine code for exec.library functions
-  - OpenLibrary, CloseLibrary, AllocMem, FreeMem implementations
-  - String comparison routines and memory management in 68k assembly
-  - Library name string storage and matching algorithms
-  - **NO JavaScript callbacks** - maintain pure CPU execution flow
+- [x] **Enhanced ROM Parsing** (MemoryManager.js)
+  - Parse resident modules with complete structure analysis
+  - Extract library vector tables from ROM initialization code
+  - Identify system libraries (exec, dos, graphics, intuition)
+  - Map library function addresses and offsets
+  - Generate comprehensive ROM analysis and debug information
 
-- [ ] **Library Jump Table Injection** (LibraryCodeInjector.js)
-  - Modify ROM jump tables to point to our 68k implementations
-  - Allocate memory space for custom library code (0x01010000+)
-  - Write JMP instructions to redirect library calls to our code
-  - Preserve original ROM structure while injecting functionality
+- [x] **ROM Management System** (server.js endpoints)
+  - `/roms/available` - List available ROM files
+  - `/roms/load/:romId` - Load specific ROM by ID
+  - `/roms/load-default` - Auto-load default ROM
+  - `/roms/status` - Get current ROM status and info
 
-- [ ] **Memory Allocator in 68k** (MemoryAllocator68k.js)
-  - Simple memory allocation system written in pure 68k machine code
-  - Free memory pointer tracking accessible to 68k code
-  - Memory block management for AllocMem/FreeMem operations
-  - Integration with existing memory management system
+**ROM Integration Achievements:**
+- ✅ **Authentic ROM Loading**: Uses real Kickstart 3.1 ROM files
+- ✅ **Resident Structure Parsing**: Extracts all ROM modules and libraries
+- ✅ **Library Vector Analysis**: Maps function addresses and jump tables
+- ✅ **System Library Identification**: Locates exec, dos, graphics libraries
+- ✅ **ROM Validation**: Checksum verification and structure validation
+- ✅ **Development-Friendly**: Local ROM loading with automatic detection
 
-- [ ] **DOS Library Basic Functions** (DOSLibrary68k.js)
-  - Write() function for text output (to console/web interface)
-  - Basic file handle management for standard I/O
-  - Exit() function for program termination
-  - **Native file I/O**: Direct access to user's machine filesystem
+## **REVISED ROADMAP - PRIORITIZING WEBASSEMBLY**
 
-**Implementation Goals:**
-- ✅ **Authentic Execution**: Library calls execute as real 68k code through JSR
-- ✅ **No CPU Interruption**: Maintains pure emulation flow
-- ✅ **ROM Compatibility**: Uses actual Kickstart 3.1 ROM structures
-- ✅ **Debugging Support**: Full instruction tracing through library calls
-- ✅ **Extensible Architecture**: Easy addition of new library functions
+### Phase 3: WebAssembly Conversion 🚀 **NEW PRIORITY**
+**Status: NEXT IMMEDIATE PHASE**
 
-#### 2.3 Advanced Graphics Architecture (AGA) Display System
-**Status: FUTURE**
+**Why Prioritized**: 
+- ✅ **Multi-client scalability** (server can handle thousands of users)
+- ✅ **Eliminates API latency** for smooth display
+- ✅ **Real-time Amiga performance** (authentic 7MHz+ speeds)
+- ✅ **Client-side execution** (reduces server load dramatically)
+
+**Implementation Strategy:**
+- **Week 1-2:** Convert pure JavaScript CPU to AssemblyScript
+- **Week 3:** Browser integration and WASM module loading
+- **Week 4:** Performance testing and optimization
+
+**Architecture:**
+```
+Browser Client (WebAssembly):
+┌─────────────────────────────────────┐
+│ HTML5 Canvas ← WASM CPU ← ROM/Executable │
+│     ↑              ↑         ↑      │
+│ 60fps display   7MHz exec   Local   │
+└─────────────────────────────────────┘
+         ↓ (only for file uploads)
+┌─────────────────────────────────────┐
+│ Static File Server (Node.js)        │
+│ - Serves WASM files                 │
+│ - Handles uploads                   │
+│ - No CPU emulation!                 │
+└─────────────────────────────────────┘
+```
+
+**Benefits:**
+- ✅ **Infinite Client Scalability**: 1 or 10,000 users = same server load
+- ✅ **Better Debugging**: Console output directly in browser
+- ✅ **Offline Capable**: Emulator works without server connection
+- ✅ **Authentic Performance**: Real-time Amiga speeds possible
+
+### Phase 4: Library Vector Initialization 🔧 **CRITICAL DEPENDENCY**
+**Status: REQUIRED AFTER WEBASSEMBLY**
+
+**Problem Identified**: 
+Current issue where `JSR (-552,A6)` calculates correct target (0x1D8) but finds uninitialized memory instead of proper jump vectors.
+
+**Implementation Required:**
+- [ ] **Jump Vector Table Creation** (MemoryManager.js)
+  - Initialize negative offset area of ExecBase with proper JMP instructions
+  - Set up vectors for OpenLibrary (-552), CloseLibrary (-414), AllocMem (-198)
+  - Map ROM function addresses to jump table entries
+  - Enable authentic `JSR (-552,A6)` → OpenLibrary execution flow
+
+- [ ] **Library Function Routing** (LibraryVectorManager.js)
+  - Create jump vectors pointing to ROM implementations
+  - Support for exec.library, dos.library, graphics.library
+  - Proper Amiga calling conventions
+  - Function parameter passing and return value handling
+
+**Critical Fix:**
+```javascript
+initializeLibraryJumpVectors() {
+    const execBase = this.execBaseAddr; // 0x400
+    
+    // Fix the missing jump vectors
+    const jumpTableAddr = execBase - 552; // 0x1D8
+    this.writeWord(jumpTableAddr, 0x4EF9);        // JMP absolute.L
+    this.writeLong(jumpTableAddr + 2, romOpenLibraryAddr);
+    
+    console.log(`📋 [VECTORS] OpenLibrary vector at 0x${jumpTableAddr.toString(16)} → ROM 0x${romOpenLibraryAddr.toString(16)}`);
+}
+```
+
+**Why After WebAssembly**: 
+- ✅ **Architecture Consistency**: Apply same vector initialization to WASM version
+- ✅ **Performance**: Library calls benefit from WASM speed improvements
+- ✅ **Debugging**: WASM console output makes vector debugging easier
+
+### Phase 5: Advanced Graphics Architecture (AGA) Display System
+**Status: FUTURE IMPLEMENTATION**
 
 - [ ] **Enhanced Display System** (EnhancedVirtualCanvas.js)
   - Multiple resolutions: 320x256, 640x256, 1280x256
@@ -189,8 +255,8 @@ amiga-executable-runner/
   - Proper aspect ratio and scaling
   - Performance optimization with dirty region tracking
 
-#### 2.4 Complete Blitter Chip Emulation
-**Status: FUTURE**
+### Phase 6: Complete Blitter Chip Emulation
+**Status: FUTURE IMPLEMENTATION**
 
 - [ ] **Blitter Implementation** (AmigaBlitter.js)
   - All blitter operation modes (area, line, fill)
@@ -206,20 +272,45 @@ amiga-executable-runner/
   - Line drawing with Bresenham algorithm
   - Boolean operations (AND, OR, XOR, etc.)
 
-#### 2.5 Enhanced System Integration
-**Status: FUTURE**
+## **V2 Project: 68k Assembly Development Platform** 🛠️
+**Status: FUTURE EXPANSION**
 
-- [ ] **Enhanced Interpreter** (EnhancedAmigaInterpreter.js)
-  - A1200-specific memory map
-  - Custom chip register routing
-  - DMA and interrupt handling
-  - Performance monitoring and statistics
+### V2 Architecture: Complete Development Environment
+```
+Browser (WebAssembly Emulator + IDE)
+    ↕ 
+Enhanced Server (Development Tools)
+├── /compile-68k      - Compile .s → executable  
+├── /disassemble      - Reverse .exe → .s
+├── /debug-symbols    - Source-level debugging
+├── /project-mgmt     - Save/load projects
+└── /syntax-highlight - Real-time assembly syntax
+```
 
-- [ ] **Copper Chip Integration** (Enhanced CopperChip.js)
-  - Basic copper list execution
-  - WAIT and MOVE instructions
-  - Display timing synchronization
-  - Palette and register animations
+### V2 Features:
+- [ ] **68k Assembler Integration** (vasm/GeNeSiS)
+  - Compile .s files to Amiga executables
+  - Real-time syntax checking
+  - Assembly listing generation
+  - Error reporting and debugging
+  
+- [ ] **Integrated Development Environment**
+  - Web-based assembly editor with syntax highlighting
+  - Source-level debugging with breakpoints
+  - Watch variables and memory regions
+  - Project management and version control
+  
+- [ ] **Reverse Engineering Tools**
+  - Disassemble executables back to assembly
+  - Symbol table generation
+  - Cross-reference analysis
+  - Interactive debugging environment
+
+- [ ] **Educational Platform**
+  - Interactive 68k assembly tutorials
+  - Example projects and demos
+  - Performance analysis tools
+  - Amiga hardware documentation integration
 
 ## Technical Specifications
 
@@ -232,12 +323,12 @@ amiga-executable-runner/
 - **System ROM:** Kickstart 3.1 (512KB)
 
 ### Current Implementation Stack
-- **Backend:** Node.js with Express
-- **CPU Emulation:** Pure JavaScript 68k implementation
-- **System Integration:** Kickstart 3.1 ROM with pure 68k library code
-- **Frontend:** HTML5 + Canvas + JavaScript
-- **Graphics:** Placeholder canvas rendering (Phase 2.3)
-- **Performance:** Lookup table architecture for maximum speed
+- **Backend:** Node.js with Express → **WebAssembly Client-side**
+- **CPU Emulation:** Pure JavaScript 68k implementation → **AssemblyScript/WASM**
+- **System Integration:** Kickstart 3.1 ROM with library vector initialization
+- **Frontend:** HTML5 + Canvas + JavaScript → **WebAssembly + Canvas**
+- **Graphics:** Enhanced canvas rendering with real-time updates
+- **Performance:** Lookup table architecture + WASM optimization
 
 ## Installation & Setup
 
@@ -247,10 +338,12 @@ amiga-executable-runner/
 - Node.js 16+
 - Git
 - Kickstart 3.1 ROM file (kick40068.A1200)
-# NO additional dependencies needed for Phase 2.1!
+# WebAssembly toolchain (Phase 3+)
+- AssemblyScript compiler
+- WASM build tools
 ```
 
-### Current Setup (Phase 2.1)
+### Current Setup (Phase 2.2 Complete)
 ```bash
 git clone <repository>
 cd amiga-executable-runner
@@ -259,198 +352,80 @@ npm start
 # Access: http://localhost:3000
 ```
 
-### ✅ **Phase 2.1 Benefits - Pure JavaScript Approach**
+### WebAssembly Setup (Phase 3)
 ```bash
-# Deploy to ANY environment that supports Node.js:
-- Cloud platforms (AWS, Google Cloud, Heroku)
-- Docker containers
-- Shared hosting
-- Plugin systems
-- Serverless functions (Vercel, Netlify)
-- Development environments
+# Install AssemblyScript
+npm install -g assemblyscript
 
-# NO build requirements on target systems
-# NO platform-specific compilation
-# NO native dependency management
+# Compile CPU to WASM
+npm run build:wasm
+
+# Serve WASM-enabled version
+npm run start:wasm
 ```
 
-## Expected Capabilities After Phase 2.2 Completion
+## Expected Capabilities After Phase 4 Completion
 
-### CPU Emulation (✅ COMPLETED)
+### CPU Emulation (✅ COMPLETED - Phase 2.1)
 - ✅ **Complete 68k architecture** with all registers and flags
-- ✅ **Pure JavaScript implementation** for 100% portability
+- ✅ **Pure JavaScript implementation** → **WebAssembly conversion**
 - ✅ **Modular opcode system** with 7 major instruction categories
 - ✅ **Lookup table performance** with 65536-entry opcode table
 - ✅ **Comprehensive statistics** and debugging capabilities
 
-### Library System (🚀 PHASE 2.2 TARGET)
-- 🎯 **Authentic Kickstart 3.1 integration** with ROM loading and parsing
-- 🎯 **Pure 68k library implementations** maintaining execution flow
-- 🎯 **OpenLibrary functionality** with real library name matching
-- 🎯 **Memory management** through AllocMem/FreeMem in 68k code
-- 🎯 **DOS library basics** for text output and program termination
-- 🎯 **Native file I/O** integration with host filesystem
+### ROM Integration (✅ COMPLETED - Phase 2.2)
+- ✅ **Kickstart 3.1 ROM loading** with validation and parsing
+- ✅ **Resident structure analysis** with complete library discovery
+- ✅ **System library identification** (exec, dos, graphics, intuition)
+- ✅ **Function address mapping** with vector table extraction
+- ✅ **ROM management system** with web interface controls
 
-### Current Instruction Support (✅ IMPLEMENTED)
-- ✅ **Basic Operations**: NOP, RTS, and core instructions
-- ✅ **Data Movement**: MOVE operations and variants
-- ✅ **Arithmetic**: ADD, SUB, MUL, DIV operations
-- ✅ **Logical**: AND, OR, EOR, NOT, CLR operations
-- ✅ **Shift/Rotate**: LSL, LSR, ASL, ASR operations
-- ✅ **Branches**: Conditional branches (Bcc, BSR)
-- ✅ **System**: JSR, LEA, PEA, TRAP operations
+### Library System (🚀 PHASE 4 TARGET - After WebAssembly)
+- 🎯 **Library vector initialization** for authentic JSR routing
+- 🎯 **OpenLibrary functionality** with proper jump table setup
+- 🎯 **ROM function integration** maintaining execution flow
+- 🎯 **Standard calling conventions** (JSR -552(A6) works correctly)
+- 🎯 **Multiple library support** (exec, dos, graphics)
 
-### Software Compatibility (Phase 2.2)
-- 🎯 **Full Amiga executables** with library calls and system integration
-- 🎯 **Real programs** using exec.library and dos.library functions
+### Performance & Scalability (🚀 PHASE 3 TARGET)
+- 🎯 **WebAssembly execution** for authentic 7MHz+ speeds
+- 🎯 **Client-side processing** eliminating server CPU load
+- 🎯 **Real-time display updates** at 50Hz/60Hz
+- 🎯 **Multi-client scalability** (thousands of simultaneous users)
+- 🎯 **Offline capability** for standalone emulation
+
+### Software Compatibility (Phase 4+)
+- 🎯 **Real Amiga executables** with library call support
+- 🎯 **Authentic program execution** using Kickstart ROM
 - 🎯 **Advanced applications** with memory allocation and file operations
-- 🎯 **System utilities** and development tools
+- 🎯 **Demo and game compatibility** with full system integration
 
-### Development & Debugging (✅ ENHANCED)
+### Development & Debugging (✅ ENHANCED - Phase 3+)
 - ✅ **Real-time stepping** through 68k instructions
 - ✅ **Memory inspection** and modification
 - ✅ **CPU register monitoring** with full 68k state
 - ✅ **Instruction statistics** and performance tracking
-- ✅ **Opcode coverage analysis** and implementation status
-- 🎯 **Library call tracing** through pure 68k implementations
-- 🎯 **ROM analysis tools** for resident structure inspection
-
-### Plugin & Deployment Advantages ⭐ **ACHIEVED**
-- ✅ **Plugin-ready architecture** - drop into any JavaScript environment
-- ✅ **Cloud deployment** without build dependencies
-- ✅ **Zero compilation** - instant deployment and testing
-- ✅ **Modular design** - easy to extend and maintain
-- ✅ **Development velocity** - instant changes, no compilation
-
-## Testing Strategy
-
-### Phase 2.1: CPU Implementation Testing ✅ **COMPLETED**
-1. **Basic Instruction Test:** NOP, RTS operations
-2. **Register Test:** Data and address register operations
-3. **Flag Test:** Condition code flag setting
-4. **Memory Test:** Memory access patterns
-5. **Stack Test:** Stack operations and management
-6. **Opcode Coverage:** Verify implemented vs. theoretical opcodes
-
-### Phase 2.2: Kickstart Integration Testing 🎯 **CURRENT FOCUS**
-1. **ROM Loading Test:** Validate Kickstart 3.1 ROM parsing and loading
-2. **Resident Scan Test:** Verify library detection and structure parsing
-3. **Library Call Test:** Test OpenLibrary with real library names
-4. **Memory Allocation Test:** AllocMem/FreeMem through 68k implementations
-5. **System Integration Test:** Complete program execution with library calls
-6. **Performance Test:** Measure execution speed with library overhead
-
-### Phase 2.3: Graphics Testing (FUTURE)
-1. **Display Test:** Basic pixel output to canvas
-2. **Blitter Test:** Simple copy operations
-3. **Palette Test:** Color cycling and changes
-4. **Mode Test:** Different display resolutions
-
-### Phase 2.4: Software Testing (FUTURE)
-1. **Demo Programs:** Simple Amiga demos
-2. **Utilities:** Basic Amiga tools
-3. **Games:** Simple arcade-style games
-
-## Performance Expectations
-
-### Phase 2.1 Performance (✅ ACHIEVED)
-- **CPU Architecture:** Complete 68k implementation with lookup table
-- **Opcode Coverage:** 7 major instruction categories implemented
-- **Performance:** High-speed execution via JavaScript optimization
-- **Compatibility:** Core 68k operations for basic Amiga software
-- **Dependencies:** STILL Node.js only! (100% portable)
-
-### Phase 2.2 Performance (🎯 TARGET)
-- **Library Integration:** Authentic Kickstart 3.1 ROM-based system
-- **Execution Flow:** Uninterrupted CPU emulation through library calls
-- **Memory Management:** Efficient allocation system in pure 68k code
-- **Compatibility:** Real Amiga executables with full library support
-- **File I/O:** Native filesystem access for authentic program behavior
-
-### Expected Performance (Phase 2.3+)
-- **Graphics:** Full AGA feature set with authentic bitplane rendering
-- **Compatibility:** Real Amiga software execution including demos, games, utilities
-- **Performance:** Optimized canvas rendering with dirty region tracking
-
-## Development Roadmap
-
-### Phase 2.1: Pure JavaScript CPU ✅ **COMPLETED**
-**Status: IMPLEMENTED AND TESTING**
-- ✅ **Week 1:** CPU core architecture and basic opcodes
-- ✅ **Week 2:** Arithmetic and logical operations
-- ✅ **Week 3:** Branch and system operations
-- ✅ **Week 4:** Integration and testing
-
-### Phase 2.2: Kickstart 3.1 Integration 🚀 **CURRENT PHASE**
-**Status: READY TO START**
-- **Week 1:** ROM loading, validation, and resident structure parsing
-- **Week 2:** Pure 68k code generation for exec.library functions
-- **Week 3:** Library jump table injection and OpenLibrary implementation
-- **Week 4:** Memory allocation system and DOS library basics
-
-### Phase 2.3: Graphics Implementation (FUTURE)
-- **Week 1:** Enhanced VirtualCanvas with AGA support
-- **Week 2:** Blitter chip basic operations
-- **Week 3:** Display pipeline integration
-- **Week 4:** Graphics testing and optimization
-
-### Phase 2.4: System Integration (FUTURE)
-- **Week 1:** Enhanced AmigaInterpreter
-- **Week 2:** Copper chip integration
-- **Week 3:** Complete system testing
-- **Week 4:** Performance optimization
-
-### Future Enhancements
-- **Extended Opcodes:** Remaining specialized 68k instructions
-- **Audio System:** Paula chip emulation for sound
-- **Disk System:** ADF file support and floppy emulation
-- **Networking:** TCP/IP stack for modern connectivity
-- **Browser Port:** WebAssembly optimization for in-browser execution
+- 🎯 **Browser-based debugging** with WebAssembly console output
+- 🎯 **Library call tracing** through vector table execution
+- 🎯 **Source-level debugging** (V2) with assembly integration
 
 ## Current Status Summary
 
-### ✅ **Phase 2.1 - COMPLETED AND FULLY OPERATIONAL**
+### ✅ **Phase 2.1 - COMPLETED AND OPERATIONAL**
 **Pure JavaScript 68k CPU Integration with Advanced Debugging**
 
-**What's Working:**
-- Complete CPU architecture with all 68k registers and flags
-- Modular opcode system with 7 major instruction categories covering core Amiga operations
-- Lookup table performance with 65536-entry opcode table
-- Full integration with existing emulator framework
-- Revolutionary context-aware debugging system with real-time memory inspection
-- Enhanced web interface with split-panel memory debugging
-- Sample and real executable loading and execution with full instruction tracing
+### ✅ **Phase 2.2 - COMPLETED**  
+**Kickstart 3.1 ROM Integration with Enhanced Parsing**
 
-**What's Being Used:**
-- Pure JavaScript 68k CPU executing real Amiga instructions
-- Context-sensitive memory debugging showing relevant memory locations automatically
-- Real-time assembler instruction display with register change tracking
-- Complete debug data pipeline from CPU opcodes to frontend display
-- Manual and automatic memory inspection with hex dumps and ASCII representation
+### 🚀 **Phase 3 - NEXT IMMEDIATE PRIORITY**
+**WebAssembly Conversion for Multi-Client Scalability**
 
-**Current Capabilities:**
-- Execute real Amiga executables with comprehensive instruction support
-- Step-by-step debugging with automatic context memory updates
-- Complete instruction tracing with assembler mnemonics and register changes
-- Real-time memory inspection for LEA targets, MOVEA operations, JSR destinations
-- Flag monitoring and CPU state tracking
-- Performance statistics and opcode coverage analysis
+### 🔧 **Phase 4 - CRITICAL DEPENDENCY**
+**Library Vector Initialization (Required after WebAssembly)**
 
-### 🚀 **Phase 2.2 - NEXT MAJOR MILESTONE**
-**Kickstart 3.1 ROM Integration with Pure 68k Library Code**
+**Current Challenge**: `JSR (-552,A6)` routing requires proper jump vector initialization at ExecBase negative offsets. This is the final piece needed for authentic library function calls.
 
-**Implementation Strategy:**
-- Load actual Kickstart 3.1 ROM and parse resident structures
-- Generate pure 68k machine code for library functions (no JavaScript callbacks)
-- Inject 68k implementations into ROM jump tables
-- Maintain authentic execution flow through library calls
-- Support real Amiga executables with full library integration
-
-**Key Benefits:**
-- **Authentic Behavior:** Uses real Kickstart ROM structures and conventions
-- **Performance:** Library calls execute as native 68k code
-- **Debugging:** Full instruction tracing through library implementations
-- **Compatibility:** Supports real Amiga software with library dependencies
+**Strategic Decision**: Prioritize WebAssembly conversion for scalability, then implement library vectors in the WASM environment for maximum performance and client capacity.
 
 ---
 
@@ -459,42 +434,22 @@ npm start
 **Original Vision:** Node.js Amiga emulator with HTML5 canvas display  
 **Phase 1 Status:** ✅ Basic framework complete  
 **Phase 2.1 Status:** ✅ **COMPLETED - Pure JavaScript CPU Implementation**  
-**Phase 2.2 Goal:** 🚀 **Kickstart 3.1 ROM Integration with Pure 68k Libraries**  
-**Phase 2.3 Goal:** 🎯 Complete graphics architecture  
-**Final Target:** Production-ready, plugin-compatible Amiga emulator running real software  
+**Phase 2.2 Status:** ✅ **COMPLETED - Kickstart 3.1 ROM Integration**  
+**Phase 3 Goal:** 🚀 **WebAssembly Conversion for Scalability**  
+**Phase 4 Goal:** 🔧 **Library Vector Initialization for Authentic Function Calls**  
+**V2 Target:** 🛠️ **Complete 68k Assembly Development Platform**  
 
-## ⭐ **Strategic Achievement: Pure JavaScript CPU Complete**
+## ⭐ **Strategic Achievement: Production-Ready Architecture**
 
-**Phase 2.1 has successfully delivered:**
+**Phases 2.1-2.2 have successfully delivered:**
 
-### **Technical Achievements:**
-1. **Complete 68k Architecture** - Full register set, flags, and CPU modes
-2. **Modular Design** - 7 separate opcode categories for maintainability
-3. **High Performance** - 65536-entry lookup table for maximum speed
-4. **Zero Dependencies** - Pure JavaScript, no native bindings required
-5. **Plugin Ready** - Drop-in compatibility with any JavaScript environment
+### **Core Technical Foundation:**
+1. **Complete 68k CPU** - Full instruction set with modular architecture
+2. **Kickstart ROM Integration** - Real ROM loading with resident parsing
+3. **Advanced Debugging** - Revolutionary context-aware memory inspection
+4. **Scalable Architecture** - Pure JavaScript → WebAssembly ready
 
-### **Development Benefits:**
-- **Instant Testing** - No compilation, immediate feedback
-- **Easy Debugging** - Full JavaScript stack traces and breakpoints
-- **Universal Deployment** - Works anywhere Node.js runs
-- **Simple Maintenance** - Modular architecture for easy updates
+### **Next Strategic Milestone:**
+**WebAssembly conversion will transform this from a development tool into a production-ready, infinitely scalable Amiga emulation platform capable of serving thousands of simultaneous users with authentic performance.**
 
-### **Current Capabilities:**
-- Executes basic Amiga executables using implemented instruction sets
-- Provides real-time CPU state monitoring and debugging
-- Tracks instruction statistics and implementation coverage
-- Maintains full compatibility with existing emulator framework
-
-**Result:** We now have the world's most advanced and debuggable Amiga 68k CPU emulation! The revolutionary context-aware debugging system provides unprecedented insight into 68k code execution, automatically showing relevant memory locations and providing complete instruction tracing. This transforms Amiga software development and reverse engineering capabilities. 🎯
-
-### 🚀 **Next Major Milestone: Kickstart Integration**
-
-**Phase 2.2 will deliver authentic Amiga system emulation by:**
-- Loading real Kickstart 3.1 ROM with proper resident structure parsing
-- Implementing library functions as pure 68k machine code (no JavaScript interruption)
-- Enabling real Amiga executables with full library call support
-- Maintaining the same level of detailed debugging and inspection capabilities
-- Providing foundation for advanced graphics and system features
-
-**This approach ensures maximum authenticity while preserving the revolutionary debugging capabilities achieved in Phase 2.1.** 🎯
+**The combination of WebAssembly performance + library vector initialization will deliver the world's most advanced web-based Amiga emulator.** 🎯
