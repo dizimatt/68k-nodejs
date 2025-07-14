@@ -250,6 +250,16 @@
             font-size: 12px;
             line-height: 1.4;
         }
+        
+        code {
+            background: #333;
+            color: #ffa500;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+        }
 
         .upload-area.disabled {
             cursor: not-allowed;
@@ -1070,6 +1080,14 @@
                     // Add instruction info if available
                     if (cpuData.instruction) {
                         cpuHtml += `<strong>Last Instruction:</strong> ${cpuData.instruction}<br>`;
+                    }
+                    
+                    // Add next instruction preview if available
+                    if (cpuData.nextInstruction && cpuData.running) {
+                        cpuHtml += `<strong>Next Instruction:</strong> ${cpuData.nextInstruction.instruction}<br>`;
+                        if (cpuData.nextInstruction.asm && cpuData.nextInstruction.asm !== cpuData.nextInstruction.instruction) {
+                            cpuHtml += `<strong>ASM:</strong> <code>${cpuData.nextInstruction.asm}</code><br>`;
+                        }
                     }
                     
                     // Add mini statistics if available

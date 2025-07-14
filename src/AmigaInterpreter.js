@@ -193,7 +193,19 @@ class AmigaInterpreter {
                 oldValue: cpuResult.oldValue,          // ← Must pass this through
                 newValue: cpuResult.newValue,          // ← Must pass this through (crucial!)
                 target: cpuResult.target,
-                immediate: cpuResult.immediate
+                immediate: cpuResult.immediate,
+                // *** ADD NEXT INSTRUCTION PREVIEW ***
+                nextInstruction: (() => {
+                    try {
+                        if (this.cpu && typeof this.cpu.peekNextInstruction === 'function') {
+                            const result = this.cpu.peekNextInstruction();
+                            return result;
+                        }
+                        return null;
+                    } catch (error) {
+                        return null;
+                    }
+                })()
             },
             memory: {
                 chipRam: this.memory.getChipRamSample(),

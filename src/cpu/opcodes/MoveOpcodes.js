@@ -136,6 +136,22 @@ const MoveOpcodes = {
             opcodeTable[opcode] = () => this.op_movea_l_pc_d16_a.call(cpu, reg);
         }
         
+        // MOVE.W (An)+,Dn - Move word from address register indirect with post-increment to data register
+        for (let srcReg = 0; srcReg < 8; srcReg++) {
+            for (let dstReg = 0; dstReg < 8; dstReg++) {
+                const opcode = 0x3000 | (dstReg << 9) | (3 << 6) | (3 << 3) | srcReg;
+                opcodeTable[opcode] = () => this.op_move_w_a_inc_d.call(cpu, srcReg, dstReg);
+            }
+        }
+        
+        // MOVE.L (An)+,Dn - Move long from address register indirect with post-increment to data register
+        for (let srcReg = 0; srcReg < 8; srcReg++) {
+            for (let dstReg = 0; dstReg < 8; dstReg++) {
+                const opcode = 0x2000 | (dstReg << 9) | (1 << 6) | (3 << 3) | srcReg;
+                opcodeTable[opcode] = () => this.op_move_l_a_inc_d.call(cpu, srcReg, dstReg);
+            }
+        }
+        
         console.log('✅ [CPU] Move opcodes setup complete');
     },
     
@@ -595,6 +611,71 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: value,
             immediate: displacement
+        };
+    },
+    
+    // MOVE.W (An)+,Dn - Post-increment addressing mode implementations
+    op_move_w_a_inc_d(srcReg, dstReg) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[srcReg];
+        const value = this.memory.readWord(address);
+        const oldValue = this.registers.d[dstReg];
+        
+        // Post-increment the address register
+        this.registers.a[srcReg] = (this.registers.a[srcReg] + 2) >>> 0;
+        
+        // Store value in destination data register (word size)
+        this.registers.d[dstReg] = (this.registers.d[dstReg] & 0xFFFF0000) | (value & 0xFFFF);
+        this.setFlags16(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.W (A${srcReg})+,D${dstReg}         ; Move word with post-increment`);
+        console.log(`       → Read: (A${srcReg})@0x${address.toString(16)} = 0x${value.toString(16).padStart(4, '0')}, A${srcReg}++ = 0x${this.registers.a[srcReg].toString(16)}`);
+        console.log(`       → D${dstReg}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.d[dstReg].toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 8;
+        return { 
+            name: `MOVE.W (A${srcReg})+,D${dstReg}`, 
+            cycles: 8,
+            asm: `MOVE.W (A${srcReg})+,D${dstReg}`,
+            description: 'Move word from address register indirect with post-increment',
+            pc: pc,
+            address: address,
+            value: value,
+            oldValue: oldValue,
+            newValue: this.registers.d[dstReg]
+        };
+    },
+    
+    op_move_l_a_inc_d(srcReg, dstReg) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[srcReg];
+        const highWord = this.memory.readWord(address);
+        const lowWord = this.memory.readWord(address + 2);
+        const value = ((highWord << 16) | lowWord) >>> 0;
+        const oldValue = this.registers.d[dstReg];
+        
+        // Post-increment the address register by 4 for long
+        this.registers.a[srcReg] = (this.registers.a[srcReg] + 4) >>> 0;
+        
+        // Store value in destination data register (long size)
+        this.registers.d[dstReg] = value >>> 0;
+        this.setFlags32(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.L (A${srcReg})+,D${dstReg}         ; Move long with post-increment`);
+        console.log(`       → Read: (A${srcReg})@0x${address.toString(16)} = 0x${value.toString(16).padStart(8, '0')}, A${srcReg}++ = 0x${this.registers.a[srcReg].toString(16)}`);
+        console.log(`       → D${dstReg}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.d[dstReg].toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 12;
+        return { 
+            name: `MOVE.L (A${srcReg})+,D${dstReg}`, 
+            cycles: 12,
+            asm: `MOVE.L (A${srcReg})+,D${dstReg}`,
+            description: 'Move long from address register indirect with post-increment',
+            pc: pc,
+            address: address,
+            value: value,
+            oldValue: oldValue,
+            newValue: this.registers.d[dstReg]
         };
     }
 };

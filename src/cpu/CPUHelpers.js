@@ -1,4 +1,13 @@
 // src/cpu/CPUHelpers.js - CPU Helper Functions
+//
+// setFlagsCmp8 implementation based on SAE (Scripted Amiga Emulator)
+// SAE Copyright (C) 2012 Rupert Hausberger
+// https://github.com/naTmeg/ScriptedAmigaEmulator
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
 
 const CPUHelpers = {
     // Memory access helpers
@@ -11,6 +20,19 @@ const CPUHelpers = {
     fetchLong() {
         const high = this.fetchWord();
         const low = this.fetchWord();
+        return ((high << 16) | low) >>> 0;
+    },
+    
+    // Methods for instruction operand fetching
+    getNextWord() {
+        const word = this.memoryManager.read16(this.registers.pc);
+        this.registers.pc = (this.registers.pc + 2) >>> 0;
+        return word;
+    },
+    
+    getNextLong() {
+        const high = this.getNextWord();
+        const low = this.getNextWord();
         return ((high << 16) | low) >>> 0;
     },
     
@@ -56,12 +78,40 @@ const CPUHelpers = {
         this.flag_x = this.flag_c;
     },
     
+    setFlagsAdd32(src, dst, result) {
+        this.flag_z = (result >>> 0) === 0 ? 1 : 0;
+        this.flag_n = (result & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_c = result > 0xFFFFFFFF ? 1 : 0;
+        this.flag_v = ((src ^ result) & (dst ^ result) & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_x = this.flag_c;
+    },
+    
     setFlagsSub16(dst, src, result) {
         this.flag_z = (result & 0xFFFF) === 0 ? 1 : 0;
         this.flag_n = (result & 0x8000) !== 0 ? 1 : 0;
         this.flag_c = result < 0 ? 1 : 0;
         this.flag_v = ((dst ^ src) & (dst ^ result) & 0x8000) !== 0 ? 1 : 0;
         this.flag_x = this.flag_c;
+    },
+    
+    setFlagsSub32(dst, src, result) {
+        this.flag_z = (result >>> 0) === 0 ? 1 : 0;
+        this.flag_n = (result & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_c = result < 0 ? 1 : 0;
+        this.flag_v = ((dst ^ src) & (dst ^ result) & 0x80000000) !== 0 ? 1 : 0;
+        this.flag_x = this.flag_c;
+    },
+    
+    // CMP flag setting based on SAE emulator implementation
+    setFlagsCmp8(src, dst, result) {
+        const srcNeg = (src & 0x80) !== 0;
+        const dstNeg = (dst & 0x80) !== 0;
+        const resNeg = (result & 0x80) !== 0;
+        
+        this.flag_v = (!srcNeg && dstNeg && !resNeg) || (srcNeg && !dstNeg && resNeg) ? 1 : 0;
+        this.flag_c = (srcNeg && !dstNeg) || (resNeg && !dstNeg) || (srcNeg && resNeg) ? 1 : 0;
+        this.flag_n = resNeg ? 1 : 0;
+        this.flag_z = (result & 0xFF) === 0 ? 1 : 0;
     },
     
     setFlagsLogic16(result) {

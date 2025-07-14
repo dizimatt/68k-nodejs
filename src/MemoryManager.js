@@ -34,6 +34,7 @@ class MemoryManager {
             FindTask: -294,      // -0x126 (verified)
             Permit: -138,        // -0x8A  (verified)
             Forbid: -132,        // -0x84  (verified)
+            MakeFunctions: -90,  // -0x5A  (needed by OpenLibrary)
         };
         
         // Stub management (for later ROM integration)
@@ -178,6 +179,16 @@ class MemoryManager {
         
         // Initialize basic ExecBase only
         this.initializeExecBase();
+        
+        // FORCE: Create simple OpenLibrary stub and vector
+        // Simple stub: MOVE.L #$12000,D0; RTS (return intuition.library base)
+        this.writeWord(0x20000, 0x203C);       // MOVE.L #immediate,D0
+        this.writeLong(0x20002, 0x12000);      // Fake intuition.library base
+        this.writeWord(0x20006, 0x4E75);       // RTS
+        
+        this.writeWord(this.execBaseAddr - 552, 0x4EF9);        // JMP absolute.L
+        this.writeLong(this.execBaseAddr - 550, 0x20000);       // Point to our stub
+        console.log(`🔧 [FORCE] OpenLibrary vector at 0x${(this.execBaseAddr - 552).toString(16)} → JMP 0x20000`);
         
         // Mark as "initialized" but without ROM functionality
         this.kickstartInitialized = true;
@@ -996,6 +1007,9 @@ The emulator will validate ROM files on load and report any issues.
         // Create Forbid stub at 0x20600
         this.createForbidStub(0x20600);
         
+        // Create MakeFunctions stub at 0x20700
+        this.createMakeFunctionsStub(0x20700);
+        
         console.log('✅ [EXEC] All exec.library stubs implemented as pure 68k opcodes');
     }
 
@@ -1179,6 +1193,24 @@ The emulator will validate ROM files on load and report any issues.
         this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
         
         console.log(`✅ [STUB] Forbid stub: ${offset} bytes of 68k opcodes`);
+    }
+    
+    // *** NEW: MakeFunctions implementation (pure 68k opcodes) ***
+    createMakeFunctionsStub(address) {
+        console.log(`🔧 [STUB] Creating MakeFunctions stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // MakeFunctions(target:A0, functionArray:A1, funcDispBase:A2) -> tableSize:D0
+        // Creates jump table at target address (backwards)
+        
+        // MOVEQ #24,D0           ; Return table size = 4 functions * 6 bytes = 24
+        this.writeWord(address + offset, 0x7018); offset += 2;   // MOVEQ #24,D0
+        
+        // RTS                    ; Return from subroutine
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] MakeFunctions stub created: ${offset} bytes`);
     }
 
     // *** NEW: Find jump table pattern ***
@@ -1689,7 +1721,8 @@ The emulator will validate ROM files on load and report any issues.
             'exec.FreeMem': 0x20300,
             'exec.FindTask': 0x20400,
             'exec.Permit': 0x20500,
-            'exec.Forbid': 0x20600
+            'exec.Forbid': 0x20600,
+            'exec.MakeFunctions': 0x20700
         };
         
         const stubAddr = stubMap[funcName];
@@ -1700,11 +1733,16 @@ The emulator will validate ROM files on load and report any issues.
             // Ensure the stub is actually created at the target address
             if (funcName === 'exec.OpenLibrary') {
                 this.createOpenLibraryStub(stubAddr);
-                // Fix: Manually update the jump vector to point to RAM address
-                this.writeWord(jumpAddr, 0x4EF9);        // JMP absolute.L
-                this.writeLong(jumpAddr + 2, stubAddr);  // 0x20000 
-                console.log(`🔧 [FIX] Updated jump vector at 0x${jumpAddr.toString(16)} to point to RAM stub at 0x${stubAddr.toString(16)}`);
             }
+            
+            // FORCE: Always ensure jump vector points to our stub  
+            this.writeWord(jumpAddr, 0x4EF9);        // JMP absolute.L
+            this.writeLong(jumpAddr + 2, stubAddr);  // Force stub address
+            console.log(`🔧 [FORCE] Jump vector at 0x${jumpAddr.toString(16)} → JMP 0x${stubAddr.toString(16)}`);
+            
+            // Verify it stuck
+            const verify = this.readLong(jumpAddr + 2);
+            console.log(`🔍 [VERIFY] Jump vector now points to 0x${verify.toString(16)}`);
         } else {
             // Fallback: simple NOP+RTS stub
             this.writeWord(jumpAddr, 0x4E71);     // NOP

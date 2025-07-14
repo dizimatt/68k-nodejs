@@ -1,4 +1,13 @@
 // src/cpu/opcodes/ArithmeticOpcodes.js - Arithmetic Operations (WITH DEBUG LOGGING)
+//
+// CMPI.B implementation based on SAE (Scripted Amiga Emulator)
+// SAE Copyright (C) 2012 Rupert Hausberger
+// https://github.com/naTmeg/ScriptedAmigaEmulator
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
 
 const ArithmeticOpcodes = {
     setup(opcodeTable, cpu) {
@@ -87,6 +96,24 @@ const ArithmeticOpcodes = {
                 opcodeTable[opcode] = () => this.op_subq_l_d.call(cpu, data, reg);
             }
         }
+        
+        // CMPI.B #imm,Dn (0x0C00-0x0C07)
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C00 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_d.call(cpu, reg);
+        }
+        
+        // CMPI.B #imm,(An) (0x0C10-0x0C17)  
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C10 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_an.call(cpu, reg);
+        }
+        
+        // CMPI.B #imm,abs.W (0x0C38)
+        opcodeTable[0x0C38] = () => this.op_cmpi_b_abs_w.call(cpu);
+        
+        // CMPI.B #imm,abs.L (0x0C39)  
+        opcodeTable[0x0C39] = () => this.op_cmpi_b_abs_l.call(cpu);
         
         console.log('✅ [CPU] Arithmetic opcodes setup complete');
     },
@@ -331,6 +358,102 @@ const ArithmeticOpcodes = {
             immediate: data,
             oldValue: oldValue,
             newValue: result
+        };
+    },
+    
+    // CMPI.B implementations based on SAE emulator
+    op_cmpi_b_d(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF; // Read immediate byte value
+        const operand = this.registers.d[reg] & 0xFF;
+        const result = operand - immediate;
+        
+        // Set flags using comparison logic from SAE
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #$${immediate.toString(16).padStart(2, '0')},D${reg}         ; Compare immediate byte with data register`);
+        console.log(`       → Compare: D${reg}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 8;
+        return { 
+            name: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},D${reg}`, 
+            cycles: 8,
+            asm: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},D${reg}`,
+            description: 'Compare immediate byte with data register',
+            pc: pc,
+            immediate: immediate
+        };
+    },
+    
+    op_cmpi_b_an(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const address = this.registers.a[reg];
+        const operand = this.memory.readByte(address);
+        const result = operand - immediate;
+        
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #$${immediate.toString(16).padStart(2, '0')},(A${reg})        ; Compare immediate byte with memory`);
+        console.log(`       → Compare: (A${reg})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 12;
+        return { 
+            name: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},(A${reg})`, 
+            cycles: 12,
+            asm: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},(A${reg})`,
+            description: 'Compare immediate byte with memory',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    },
+    
+    op_cmpi_b_abs_w() {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const address = this.fetchWord();
+        const operand = this.memory.readByte(address);
+        const result = operand - immediate;
+        
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}      ; Compare immediate byte with absolute word address`);
+        console.log(`       → Compare: ($${address.toString(16)})(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 16;
+        return { 
+            name: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}`, 
+            cycles: 16,
+            asm: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}`,
+            description: 'Compare immediate byte with absolute word address',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    },
+    
+    op_cmpi_b_abs_l() {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const address = this.fetchLong();
+        const operand = this.memory.readByte(address);
+        const result = operand - immediate;
+        
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}  ; Compare immediate byte with absolute long address`);
+        console.log(`       → Compare: ($${address.toString(16)})(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 20;
+        return { 
+            name: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}`, 
+            cycles: 20,
+            asm: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}`,
+            description: 'Compare immediate byte with absolute long address',
+            pc: pc,
+            immediate: immediate,
+            address: address
         };
     }
 };

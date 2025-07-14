@@ -112,7 +112,9 @@ app.get('/step', (req, res) => {
                 oldValue: result.cpu.oldValue,
                 newValue: result.cpu.newValue,
                 target: result.cpu.target,
-                immediate: result.cpu.immediate
+                immediate: result.cpu.immediate,
+                // Next instruction preview
+                nextInstruction: result.cpu.nextInstruction
             },
             memory: result.memory,
             display: result.display,
@@ -451,6 +453,46 @@ app.get('/test-memory', (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: error.message 
+        });
+    }
+});
+
+// Debug endpoint to test nextInstruction functionality
+app.get('/debug/next-instruction', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.cpu) {
+            return res.json({ 
+                error: 'CPU not initialized',
+                hasInterpreter: !!interpreter,
+                hasCpu: !!(interpreter && interpreter.cpu)
+            });
+        }
+        
+        const cpu = interpreter.cpu;
+        const isRunning = cpu.isRunning();
+        let nextInstruction = null;
+        let error = null;
+        
+        try {
+            if (isRunning) {
+                nextInstruction = cpu.peekNextInstruction();
+            }
+        } catch (e) {
+            error = e.message;
+        }
+        
+        res.json({
+            success: true,
+            cpuIsRunning: isRunning,
+            nextInstruction: nextInstruction,
+            error: error,
+            currentPC: cpu.getProgramCounter ? cpu.getProgramCounter() : 'N/A',
+            hasMethod: typeof cpu.peekNextInstruction === 'function'
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            error: 'Debug endpoint failed: ' + error.message 
         });
     }
 });
