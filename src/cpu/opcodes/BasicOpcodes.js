@@ -1,7 +1,13 @@
 // src/cpu/opcodes/BasicOpcodes.js - Basic CPU Operations (WITH DEBUG LOGGING)
 
-const BasicOpcodes = {
-    setup(opcodeTable, cpu) {
+class BasicOpcodes {
+
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        const cpu = this.cpu;
         console.log('🔧 [CPU] Setting up basic opcodes...');
         
         // NOP - No Operation
@@ -17,7 +23,7 @@ const BasicOpcodes = {
         opcodeTable[0x4E70] = () => this.op_reset.call(cpu);
         
         console.log('✅ [CPU] Basic opcodes setup complete');
-    },
+    }
     
     // Basic opcode implementations
     op_nop() {
@@ -34,7 +40,7 @@ const BasicOpcodes = {
             description: 'No operation',
             pc: pc
         };
-    },
+    }
     
     op_rts() {
         const pc = this.registers.pc - 2; // PC was already advanced
@@ -70,7 +76,7 @@ const BasicOpcodes = {
             pc: pc,
             target: returnAddr
         };
-    },
+    }
     
     op_rte() {
         const pc = this.registers.pc - 2;
@@ -107,7 +113,7 @@ const BasicOpcodes = {
             pc: pc,
             target: returnAddr
         };
-    },
+    }
     
     op_reset() {
         const pc = this.registers.pc - 2;
@@ -136,6 +142,6 @@ const BasicOpcodes = {
             pc: pc
         };
     }
-};
+}
 
-module.exports = { BasicOpcodes };
+module.exports = BasicOpcodes;

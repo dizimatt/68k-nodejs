@@ -1,7 +1,12 @@
 // src/cpu/opcodes/ShiftOpcodes.js - Shift Operations
 
-const ShiftOpcodes = {
-    setup(opcodeTable, cpu) {
+class ShiftOpcodes {
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        const cpu = this.cpu;
         console.log('🔧 [CPU] Setting up shift opcodes...');
         
         // LSL.W #count,Dn
@@ -41,7 +46,7 @@ const ShiftOpcodes = {
         }
         
         console.log('✅ [CPU] Shift opcodes setup complete');
-    },
+    }
     
     // Shift opcode implementations
     op_lsl_w_i_d(count, reg) {
@@ -58,7 +63,7 @@ const ShiftOpcodes = {
         this.setFlagsLogic16(value);
         this.cycles += 6 + (count * 2);
         return { name: `LSL.W #${count},D${reg}`, cycles: 6 + (count * 2) };
-    },
+    }
     
     op_lsr_w_i_d(count, reg) {
         let value = this.registers.d[reg] & 0xFFFF;
@@ -74,7 +79,7 @@ const ShiftOpcodes = {
         this.setFlagsLogic16(value);
         this.cycles += 6 + (count * 2);
         return { name: `LSR.W #${count},D${reg}`, cycles: 6 + (count * 2) };
-    },
+    }
     
     op_asl_w_i_d(count, reg) {
         let value = this.registers.d[reg] & 0xFFFF;
@@ -94,7 +99,7 @@ const ShiftOpcodes = {
         this.setFlags16(value);
         this.cycles += 6 + (count * 2);
         return { name: `ASL.W #${count},D${reg}`, cycles: 6 + (count * 2) };
-    },
+    }
     
     op_asr_w_i_d(count, reg) {
         let value = this.registers.d[reg] & 0xFFFF;
@@ -114,4 +119,4 @@ const ShiftOpcodes = {
     }
 };
 
-module.exports = { ShiftOpcodes };
+module.exports = ShiftOpcodes;

@@ -1,7 +1,13 @@
 // src/cpu/opcodes/BranchOpcodes.js - Branch Operations
 
-const BranchOpcodes = {
-    setup(opcodeTable, cpu) {
+class BranchOpcodes {
+
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        const cpu = this.cpu;
         console.log('🔧 [CPU] Setting up branch opcodes...');
         
         // Branch instructions (6000-6FFF)
@@ -30,7 +36,7 @@ const BranchOpcodes = {
         }
         
         console.log('✅ [CPU] Branch opcodes setup complete (including JMP and DBcc)');
-    },
+    }
     
     // Branch opcode implementations
     op_bcc_8(condition, displacement) {
@@ -56,7 +62,7 @@ const BranchOpcodes = {
             cycles: conditionMet ? 10 : 8,
             taken: conditionMet 
         };
-    },
+    }
     
     op_bsr_8(displacement) {
         let offset = displacement;
@@ -78,7 +84,7 @@ const BranchOpcodes = {
             name: `BSR $${offset.toString(16)}`, 
             cycles: 18
         };
-    },
+    }
     
     op_jmp_absolute_l() {
         // JMP absolute.L - Jump to absolute long address
@@ -96,7 +102,7 @@ const BranchOpcodes = {
             cycles: 12,
             target: targetAddress
         };
-    },
+    }
     
     // DBcc - Decrement and Branch on Condition
     op_dbcc(condition, reg) {
@@ -166,6 +172,6 @@ const BranchOpcodes = {
             };
         }
     }
-};
+}
 
-module.exports = { BranchOpcodes };
+module.exports = BranchOpcodes;

@@ -3,6 +3,7 @@
 const { setupOpcodeTable } = require('./OpcodeTable');
 const { CPUHelpers } = require('./CPUHelpers');
 const { CPUInterface } = require('./CPUInterface');
+const OpcodeTable = require('./OpcodeTable');
 
 class CPUCore {
     constructor(memory) {
@@ -35,11 +36,12 @@ class CPUCore {
         this.flag_s = 1;  // Supervisor
         
         // Initialize opcode table
-        this.opcodeTable = setupOpcodeTable(this);
+        this.opcodeTable = new OpcodeTable(this);
+//        setupOpcodeTable(this);
         
         // Count implemented opcodes
         for (let i = 0; i < 65536; i++) {
-            if (this.opcodeTable[i] !== null) {
+            if (this.opcodeTable.table[i] !== null) {
                 this.implementedInstructions.add(i);
             }
         }
@@ -58,7 +60,7 @@ class CPUCore {
         const pc = this.registers.pc;
         const opcode = this.fetchWord();
         
-        const handler = this.opcodeTable[opcode];
+        const handler = this.opcodeTable.get(opcode);
         
         if (handler) {
             // *** This is where the enhanced data comes from ***
@@ -130,7 +132,7 @@ class CPUCore {
         try {
             const pc = this.registers.pc;
             const opcode = this.memory.readWord(pc);
-            const handler = this.opcodeTable[opcode];
+            const handler = this.opcodeTable.get(opcode);
             
             if (handler) {
                 // Try to create a basic instruction description without executing

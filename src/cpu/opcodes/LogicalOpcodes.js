@@ -1,7 +1,12 @@
 // src/cpu/opcodes/LogicalOpcodes.js - Logical Operations
 
-const LogicalOpcodes = {
-    setup(opcodeTable, cpu) {
+class LogicalOpcodes {
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        const cpu = this.cpu;
         console.log('🔧 [CPU] Setting up logical opcodes...');
         
         // AND.W Dn,Dm
@@ -41,7 +46,7 @@ const LogicalOpcodes = {
         }
         
         console.log('✅ [CPU] Logical opcodes setup complete');
-    },
+    }
     
     // Logical opcode implementations
     op_and_w_d_d(src, dst) {
@@ -53,7 +58,7 @@ const LogicalOpcodes = {
         this.setFlagsLogic16(result);
         this.cycles += 4;
         return { name: `AND.W D${src},D${dst}`, cycles: 4 };
-    },
+    }
     
     op_or_w_d_d(src, dst) {
         const srcVal = this.registers.d[src] & 0xFFFF;
@@ -64,7 +69,7 @@ const LogicalOpcodes = {
         this.setFlagsLogic16(result);
         this.cycles += 4;
         return { name: `OR.W D${src},D${dst}`, cycles: 4 };
-    },
+    }
     
     op_eor_w_d_d(src, dst) {
         const srcVal = this.registers.d[src] & 0xFFFF;
@@ -75,7 +80,7 @@ const LogicalOpcodes = {
         this.setFlagsLogic16(result);
         this.cycles += 4;
         return { name: `EOR.W D${src},D${dst}`, cycles: 4 };
-    },
+    }
     
     op_not_w_d(reg) {
         const value = this.registers.d[reg] & 0xFFFF;
@@ -85,7 +90,7 @@ const LogicalOpcodes = {
         this.setFlagsLogic16(result);
         this.cycles += 4;
         return { name: `NOT.W D${reg}`, cycles: 4 };
-    },
+    }
     
     op_clr_w_d(reg) {
         this.registers.d[reg] = this.registers.d[reg] & 0xFFFF0000;
@@ -96,6 +101,6 @@ const LogicalOpcodes = {
         this.cycles += 4;
         return { name: `CLR.W D${reg}`, cycles: 4 };
     }
-};
+}
 
-module.exports = { LogicalOpcodes };
+module.exports = LogicalOpcodes;

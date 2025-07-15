@@ -9,10 +9,15 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-const ArithmeticOpcodes = {
-    setup(opcodeTable, cpu) {
-        console.log('🔧 [CPU] Setting up arithmetic opcodes...');
-        
+class ArithmeticOpcodes {
+    
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        console.log('🔧 [CPU] Setting up arithmetic opcodes (amended)...');
+        const cpu = this.cpu;        
         // ADD.W Dn,Dm
         for (let src = 0; src < 8; src++) {
             for (let dst = 0; dst < 8; dst++) {
@@ -116,7 +121,7 @@ const ArithmeticOpcodes = {
         opcodeTable[0x0C39] = () => this.op_cmpi_b_abs_l.call(cpu);
         
         console.log('✅ [CPU] Arithmetic opcodes setup complete');
-    },
+    }
     
     // Arithmetic opcode implementations
     op_add_w_d_d(src, dst) {
@@ -142,7 +147,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: this.registers.d[dst]
         };
-    },
+    }
     
     op_add_l_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -167,7 +172,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: result
         };
-    },
+    }
     
     op_sub_w_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -192,7 +197,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: this.registers.d[dst]
         };
-    },
+    }
     
     op_sub_l_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -217,7 +222,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: result
         };
-    },
+    }
     
     op_cmp_w_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -238,7 +243,7 @@ const ArithmeticOpcodes = {
             description: 'Compare word registers',
             pc: pc
         };
-    },
+    }
     
     op_cmp_l_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -259,7 +264,7 @@ const ArithmeticOpcodes = {
             description: 'Compare long registers',
             pc: pc
         };
-    },
+    }
     
     op_addq_w_d(data, reg) {
         const pc = this.registers.pc - 2;
@@ -284,7 +289,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: this.registers.d[reg]
         };
-    },
+    }
     
     op_addq_l_d(data, reg) {
         const pc = this.registers.pc - 2;
@@ -309,7 +314,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: result
         };
-    },
+    }
     
     op_subq_w_d(data, reg) {
         const pc = this.registers.pc - 2;
@@ -334,7 +339,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: this.registers.d[reg]
         };
-    },
+    }
     
     op_subq_l_d(data, reg) {
         const pc = this.registers.pc - 2;
@@ -359,7 +364,7 @@ const ArithmeticOpcodes = {
             oldValue: oldValue,
             newValue: result
         };
-    },
+    }
     
     // CMPI.B implementations based on SAE emulator
     op_cmpi_b_d(reg) {
@@ -383,7 +388,7 @@ const ArithmeticOpcodes = {
             pc: pc,
             immediate: immediate
         };
-    },
+    }
     
     op_cmpi_b_an(reg) {
         const pc = this.registers.pc - 2;
@@ -407,7 +412,7 @@ const ArithmeticOpcodes = {
             immediate: immediate,
             address: address
         };
-    },
+    }
     
     op_cmpi_b_abs_w() {
         const pc = this.registers.pc - 2;
@@ -431,7 +436,7 @@ const ArithmeticOpcodes = {
             immediate: immediate,
             address: address
         };
-    },
+    }
     
     op_cmpi_b_abs_l() {
         const pc = this.registers.pc - 2;
@@ -456,6 +461,6 @@ const ArithmeticOpcodes = {
             address: address
         };
     }
-};
+}
 
-module.exports = { ArithmeticOpcodes };
+module.exports = ArithmeticOpcodes;

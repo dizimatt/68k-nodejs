@@ -1,7 +1,12 @@
 // src/cpu/opcodes/MoveOpcodes.js - Move Operations (COMPLETE WITH ALL ADDRESSING MODES)
 
-const MoveOpcodes = {
-    setup(opcodeTable, cpu) {
+class MoveOpcodes {
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+    
+    setup(opcodeTable) {
+        const cpu = this.cpu;
         console.log('🔧 [CPU] Setting up move opcodes...');
         
         // MOVEQ #imm,Dn (7000-7FFF)
@@ -153,8 +158,8 @@ const MoveOpcodes = {
         }
         
         console.log('✅ [CPU] Move opcodes setup complete');
-    },
-    
+    }
+
     // Existing implementations...
     op_moveq(reg, data) {
         const pc = this.registers.pc - 2;
@@ -177,7 +182,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: value
         };
-    },
+    }
     
     op_move_w_imm_d(reg) {
         const pc = this.registers.pc - 2;
@@ -199,7 +204,7 @@ const MoveOpcodes = {
             pc: pc,
             immediate: immediate
         };
-    },
+    }
     
     op_move_l_imm_d(reg) {
         const pc = this.registers.pc - 2;
@@ -221,7 +226,7 @@ const MoveOpcodes = {
             pc: pc,
             immediate: immediate
         };
-    },
+    }
     
     op_move_w_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -242,7 +247,7 @@ const MoveOpcodes = {
             description: 'Move word from data register to data register',
             pc: pc
         };
-    },
+    }
     
     op_move_l_d_d(src, dst) {
         const pc = this.registers.pc - 2;
@@ -263,7 +268,7 @@ const MoveOpcodes = {
             description: 'Move long from data register to data register',
             pc: pc
         };
-    },
+    }
     
     op_movea_w_imm_a(reg) {
         const pc = this.registers.pc - 2;
@@ -285,7 +290,7 @@ const MoveOpcodes = {
             pc: pc,
             immediate: immediate
         };
-    },
+    }
     
     op_movea_l_imm_a(reg) {
         const pc = this.registers.pc - 2;
@@ -306,7 +311,7 @@ const MoveOpcodes = {
             pc: pc,
             immediate: immediate
         };
-    },
+    }
     
     // NEW: Additional MOVEA implementations
     op_movea_w_d_a(src, dst) {
@@ -330,7 +335,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: signExtended
         };
-    },
+    }
     
     op_movea_l_d_a(src, dst) {
         const pc = this.registers.pc - 2;
@@ -352,7 +357,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: value
         };
-    },
+    }
     
     op_movea_w_a_a(src, dst) {
         const pc = this.registers.pc - 2;
@@ -375,7 +380,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: signExtended
         };
-    },
+    }
     
     op_movea_l_a_a(src, dst) {
         const pc = this.registers.pc - 2;
@@ -397,7 +402,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: value
         };
-    },
+    }
     
     op_movea_w_a_ind_a(src, dst) {
         const pc = this.registers.pc - 2;
@@ -422,8 +427,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: signExtended
         };
-    },
-    
+    }
     op_movea_l_a_ind_a(src, dst) {
         const pc = this.registers.pc - 2;
         const address = this.registers.a[src];
@@ -448,8 +452,8 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: value
         };
-    },
-    
+    }
+
     // *** THE MISSING OPCODE 0x2C78 IS THIS ONE ***
     op_movea_l_aw_a(reg) {
         const pc = this.registers.pc - 2;
@@ -476,7 +480,7 @@ const MoveOpcodes = {
             newValue: value,
             immediate: address
         };
-    },
+    }
     
     op_movea_w_aw_a(reg) {
         const pc = this.registers.pc - 2;
@@ -502,7 +506,7 @@ const MoveOpcodes = {
             newValue: signExtended,
             immediate: address
         };
-    },
+    }
     
     op_movea_l_al_a(reg) {
         const pc = this.registers.pc - 2;
@@ -529,7 +533,7 @@ const MoveOpcodes = {
             newValue: value,
             immediate: address
         };
-    },
+    }
     
     op_movea_w_al_a(reg) {
         const pc = this.registers.pc - 2;
@@ -555,7 +559,7 @@ const MoveOpcodes = {
             newValue: signExtended,
             immediate: address
         };
-    },
+    }
     
     op_movea_w_pc_d16_a(reg) {
         const pc = this.registers.pc - 2;
@@ -583,7 +587,7 @@ const MoveOpcodes = {
             newValue: signExtended,
             immediate: displacement
         };
-    },
+    }
     
     op_movea_l_pc_d16_a(reg) {
         const pc = this.registers.pc - 2;
@@ -612,7 +616,7 @@ const MoveOpcodes = {
             newValue: value,
             immediate: displacement
         };
-    },
+    }
     
     // MOVE.W (An)+,Dn - Post-increment addressing mode implementations
     op_move_w_a_inc_d(srcReg, dstReg) {
@@ -644,7 +648,7 @@ const MoveOpcodes = {
             oldValue: oldValue,
             newValue: this.registers.d[dstReg]
         };
-    },
+    }
     
     op_move_l_a_inc_d(srcReg, dstReg) {
         const pc = this.registers.pc - 2;
@@ -678,6 +682,6 @@ const MoveOpcodes = {
             newValue: this.registers.d[dstReg]
         };
     }
-};
+}
 
-module.exports = { MoveOpcodes };
+module.exports = MoveOpcodes;

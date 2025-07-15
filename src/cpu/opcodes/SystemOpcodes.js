@@ -1,7 +1,12 @@
 // src/cpu/opcodes/SystemOpcodes.js - System Operations (ENHANCED WITH LEA VARIANTS)
 
-const SystemOpcodes = {
-    setup(opcodeTable, cpu) {
+class SystemOpcodes {
+    constructor(cpu) {
+        this.cpu = cpu;
+    }
+
+    setup(opcodeTable) {
+        const cpu = this.cpu;        
         console.log('🔧 [CPU] Setting up system opcodes...');
         
         // JSR (An) - Jump to Subroutine
@@ -98,7 +103,7 @@ const SystemOpcodes = {
         }
         
         console.log('✅ [CPU] System opcodes setup complete');
-    },
+    }
     
     // System opcode implementations
     op_jsr_a(reg) {
@@ -119,7 +124,7 @@ const SystemOpcodes = {
             pc: pc,
             target: target
         };
-    },
+    }
     
     // *** THE MISSING OPCODE 0x4EAE ***
     op_jsr_d16_a(reg) {
@@ -144,7 +149,7 @@ const SystemOpcodes = {
             target: target,
             immediate: displacement
         };
-    },
+    }
     
     op_jsr_d8_a_x(reg) {
         const pc = this.registers.pc - 2;
@@ -173,7 +178,7 @@ const SystemOpcodes = {
             pc: pc,
             target: target
         };
-    },
+    }
     
     op_jsr_aw() {
         const pc = this.registers.pc - 2;
@@ -193,7 +198,7 @@ const SystemOpcodes = {
             pc: pc,
             target: target
         };
-    },
+    }
     
     op_jsr_al() {
         const pc = this.registers.pc - 2;
@@ -213,7 +218,7 @@ const SystemOpcodes = {
             pc: pc,
             target: target
         };
-    },
+    }
     
     op_jsr_d16_pc() {
         const pc = this.registers.pc - 2;
@@ -236,7 +241,7 @@ const SystemOpcodes = {
             target: target,
             immediate: displacement
         };
-    },
+    }
     
     op_jsr_d8_pc_x() {
         const pc = this.registers.pc - 2;
@@ -265,7 +270,7 @@ const SystemOpcodes = {
             pc: pc,
             target: target
         };
-    },
+    }
     
     op_lea_a_a(srcReg, dstReg) {
         const pc = this.registers.pc - 2;
@@ -287,7 +292,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_lea_d16_a_a(srcReg, dstReg) {
         const pc = this.registers.pc - 2;
@@ -311,7 +316,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_lea_d16_pc_a(dstReg) {
         const pc = this.registers.pc - 2;
@@ -339,7 +344,7 @@ const SystemOpcodes = {
             newValue: address,                                   // ← MUST have this (triggers context memory!)
             immediate: displacement
         };
-    },
+    }
     
     op_lea_d8_a_x_a(srcReg, dstReg) {
         const pc = this.registers.pc - 2;
@@ -370,7 +375,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_lea_d8_pc_x_a(dstReg) {
         const pc = this.registers.pc - 2;
@@ -401,7 +406,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_lea_aw_a(dstReg) {
         const pc = this.registers.pc - 2;
@@ -423,7 +428,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_lea_al_a(dstReg) {
         const pc = this.registers.pc - 2;
@@ -445,7 +450,7 @@ const SystemOpcodes = {
             oldValue: oldValue,
             newValue: address
         };
-    },
+    }
     
     op_pea_a(reg) {
         const pc = this.registers.pc - 2;
@@ -464,7 +469,7 @@ const SystemOpcodes = {
             pc: pc,
             target: address
         };
-    },
+    }
     
     op_pea_d16_pc() {
         const pc = this.registers.pc - 2;
@@ -485,7 +490,7 @@ const SystemOpcodes = {
             pc: pc,
             target: address
         };
-    },
+    }
     
     op_trap(vector) {
         const pc = this.registers.pc - 2;
@@ -505,6 +510,6 @@ const SystemOpcodes = {
             immediate: vector
         };
     }
-};
+}
 
-module.exports = { SystemOpcodes };
+module.exports = SystemOpcodes;
