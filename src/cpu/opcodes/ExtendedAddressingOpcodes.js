@@ -54,9 +54,10 @@ class ExtendedAddressingOpcodes {
             const opcodeW = 0x31C0 | (srcReg << 9);
             opcodeTable[opcodeW] = () => this.op_move_w_d_abs_w.call(cpu, srcReg);
             
-            // MOVE.L Dn,abs.L
-            const opcodeL = 0x21C0 | (srcReg << 9);
-            opcodeTable[opcodeL] = () => this.op_move_l_d_abs_l.call(cpu, srcReg);
+            // MOVE.L Dn,abs.L - REMOVED: This conflicts with MoveOpcodes.js
+            // The correct implementation is in MoveOpcodes.js with pattern 0x23C0 | reg
+            // const opcodeL = 0x21C0 | (srcReg << 9);
+            // opcodeTable[opcodeL] = () => this.op_move_l_d_abs_l.call(cpu, srcReg);
         }
 
         // MOVE with PC-relative addressing

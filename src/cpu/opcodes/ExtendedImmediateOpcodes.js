@@ -158,8 +158,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFF, 1);
         this.setFlagsAdd8(immediate, value, result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDI.B #${immediate},${this.formatEA(mode, reg)} ; Add immediate byte`);
+        return {
+            name: `ADDI.B #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ADDI.B #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Add immediate byte to effective address`,
+            pc: pc
+        };
     }
 
     op_addi_w_imm_ea(mode, reg) {
@@ -171,8 +179,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFFFF, 2);
         this.setFlagsAdd16(immediate, value, result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDI.W #${immediate},${this.formatEA(mode, reg)} ; Add immediate word`);
+        return {
+            name: `ADDI.W #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ADDI.W #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Add immediate word to effective address`,
+            pc: pc
+        };
     }
 
     op_addi_l_imm_ea(mode, reg) {
@@ -184,8 +200,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result >>> 0, 4);
         this.setFlagsAdd32(immediate, value, result);
+        this.cycles += 12;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDI.L #${immediate},${this.formatEA(mode, reg)} ; Add immediate long`);
+        return {
+            name: `ADDI.L #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 12,
+            asm: `ADDI.L #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Add immediate long to effective address`,
+            pc: pc
+        };
     }
 
     op_subi_b_imm_ea(mode, reg) {
@@ -197,8 +221,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFF, 1);
         this.setFlagsSub8(value, immediate, result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBI.B #${immediate},${this.formatEA(mode, reg)} ; Subtract immediate byte`);
+        return {
+            name: `SUBI.B #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `SUBI.B #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Subtract immediate byte from effective address`,
+            pc: pc
+        };
     }
 
     op_subi_w_imm_ea(mode, reg) {
@@ -210,8 +242,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFFFF, 2);
         this.setFlagsSub16(value, immediate, result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBI.W #${immediate},${this.formatEA(mode, reg)} ; Subtract immediate word`);
+        return {
+            name: `SUBI.W #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `SUBI.W #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Subtract immediate word from effective address`,
+            pc: pc
+        };
     }
 
     op_subi_l_imm_ea(mode, reg) {
@@ -223,8 +263,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result >>> 0, 4);
         this.setFlagsSub32(value, immediate, result);
+        this.cycles += 12;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBI.L #${immediate},${this.formatEA(mode, reg)} ; Subtract immediate long`);
+        return {
+            name: `SUBI.L #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 12,
+            asm: `SUBI.L #${immediate},${this.formatEA(mode, reg)}`,
+            description: `Subtract immediate long from effective address`,
+            pc: pc
+        };
     }
 
     op_andi_b_imm_ea(mode, reg) {
@@ -236,8 +284,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFF, 1);
         this.setFlagsLogic8(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ANDI.B #${immediate},${this.formatEA(mode, reg)} ; AND immediate byte`);
+        return {
+            name: `ANDI.B #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ANDI.B #${immediate},${this.formatEA(mode, reg)}`,
+            description: `AND immediate byte with effective address`,
+            pc: pc
+        };
     }
 
     op_andi_w_imm_ea(mode, reg) {
@@ -249,8 +305,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFFFF, 2);
         this.setFlagsLogic16(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ANDI.W #${immediate},${this.formatEA(mode, reg)} ; AND immediate word`);
+        return {
+            name: `ANDI.W #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ANDI.W #${immediate},${this.formatEA(mode, reg)}`,
+            description: `AND immediate word with effective address`,
+            pc: pc
+        };
     }
 
     op_andi_l_imm_ea(mode, reg) {
@@ -262,8 +326,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result >>> 0, 4);
         this.setFlagsLogic32(result);
+        this.cycles += 12;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ANDI.L #${immediate},${this.formatEA(mode, reg)} ; AND immediate long`);
+        return {
+            name: `ANDI.L #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 12,
+            asm: `ANDI.L #${immediate},${this.formatEA(mode, reg)}`,
+            description: `AND immediate long with effective address`,
+            pc: pc
+        };
     }
 
     op_ori_b_imm_ea(mode, reg) {
@@ -275,8 +347,20 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFF, 1);
         this.setFlagsLogic8(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ORI.B #${immediate},${this.formatEA(mode, reg)} ; OR immediate byte`);
+        console.log(`       → ${this.formatEA(mode, reg)}: 0x${value.toString(16).padStart(2, '0')} | 0x${immediate.toString(16).padStart(2, '0')} = 0x${(result & 0xFF).toString(16).padStart(2, '0')}`);
+        
+        return {
+            name: `ORI.B #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ORI.B #${immediate},${this.formatEA(mode, reg)}`,
+            description: `OR immediate byte with effective address`,
+            pc: pc,
+            immediate: immediate,
+            result: result & 0xFF
+        };
     }
 
     op_ori_w_imm_ea(mode, reg) {
@@ -288,8 +372,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFFFF, 2);
         this.setFlagsLogic16(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ORI.W #${immediate},${this.formatEA(mode, reg)} ; OR immediate word`);
+        return {
+            name: `ORI.W #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `ORI.W #${immediate},${this.formatEA(mode, reg)}`,
+            description: `OR immediate word with effective address`,
+            pc: pc
+        };
     }
 
     op_ori_l_imm_ea(mode, reg) {
@@ -301,8 +393,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result >>> 0, 4);
         this.setFlagsLogic32(result);
+        this.cycles += 12;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ORI.L #${immediate},${this.formatEA(mode, reg)} ; OR immediate long`);
+        return {
+            name: `ORI.L #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 12,
+            asm: `ORI.L #${immediate},${this.formatEA(mode, reg)}`,
+            description: `OR immediate long with effective address`,
+            pc: pc
+        };
     }
 
     op_eori_b_imm_ea(mode, reg) {
@@ -314,8 +414,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFF, 1);
         this.setFlagsLogic8(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: EORI.B #${immediate},${this.formatEA(mode, reg)} ; XOR immediate byte`);
+        return {
+            name: `EORI.B #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `EORI.B #${immediate},${this.formatEA(mode, reg)}`,
+            description: `XOR immediate byte with effective address`,
+            pc: pc
+        };
     }
 
     op_eori_w_imm_ea(mode, reg) {
@@ -327,8 +435,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result & 0xFFFF, 2);
         this.setFlagsLogic16(result);
+        this.cycles += 8;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: EORI.W #${immediate},${this.formatEA(mode, reg)} ; XOR immediate word`);
+        return {
+            name: `EORI.W #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 8,
+            asm: `EORI.W #${immediate},${this.formatEA(mode, reg)}`,
+            description: `XOR immediate word with effective address`,
+            pc: pc
+        };
     }
 
     op_eori_l_imm_ea(mode, reg) {
@@ -340,8 +456,16 @@ class ExtendedImmediateOpcodes {
         
         this.writeMemory(ea, result >>> 0, 4);
         this.setFlagsLogic32(result);
+        this.cycles += 12;
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: EORI.L #${immediate},${this.formatEA(mode, reg)} ; XOR immediate long`);
+        return {
+            name: `EORI.L #${immediate},${this.formatEA(mode, reg)}`,
+            cycles: 12,
+            asm: `EORI.L #${immediate},${this.formatEA(mode, reg)}`,
+            description: `XOR immediate long with effective address`,
+            pc: pc
+        };
     }
 
     // Helper methods

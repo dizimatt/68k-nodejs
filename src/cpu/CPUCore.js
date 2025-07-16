@@ -62,6 +62,12 @@ class CPUCore {
         
         const handler = this.opcodeTable.get(opcode);
         
+        // Debug logging for MOVE.L opcode 0x23C0
+        if (opcode === 0x23C0) {
+            console.log(`🔍 [DEBUG] Opcode 0x23C0 handler:`, handler ? handler.name : 'null');
+            console.log(`🔍 [DEBUG] Handler function:`, handler ? handler.toString().substring(0, 100) : 'null');
+        }
+        
         if (handler) {
             // *** This is where the enhanced data comes from ***
             const result = handler();

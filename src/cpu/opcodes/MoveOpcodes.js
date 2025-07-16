@@ -193,6 +193,31 @@ class MoveOpcodes {
             }
         }
         
+        // MOVE.L Dn,(xxx).W - Move long from data register to absolute word address
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x21C0 | reg;
+            opcodeTable[opcode] = () => this.op_move_l_d_aw.call(cpu, reg);
+        }
+        
+        // MOVE.L Dn,(xxx).L - Move long from data register to absolute long address
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x23C0 | reg;
+            opcodeTable[opcode] = () => this.op_move_l_d_al.call(cpu, reg);
+            
+            // DEBUG: Log specific opcode mappings
+            if (opcode === 0x23C0) {
+                console.log(`🔍 [DEBUG] Opcode 0x23C0 mapped to MOVE.L D${reg},(xxx).L`);
+            }
+        }
+        
+        // MOVE.L Dn,(An) - Move long from data register to address register indirect
+        for (let srcReg = 0; srcReg < 8; srcReg++) {
+            for (let dstReg = 0; dstReg < 8; dstReg++) {
+                const opcode = 0x2080 | (dstReg << 9) | srcReg;
+                opcodeTable[opcode] = () => this.op_move_l_d_a_ind.call(cpu, srcReg, dstReg);
+            }
+        }
+        
         console.log('✅ [CPU] Move opcodes setup complete');
     }
 
@@ -788,6 +813,101 @@ class MoveOpcodes {
             asm: `MOVE.B D${src},D${dst}`,
             description: 'Move byte from data register to data register',
             pc: pc
+        };
+    }
+    
+    // MOVE.L Dn,(xxx).W - Move long from data register to absolute word address
+    op_move_l_d_aw(reg) {
+        const pc = this.registers.pc - 2;
+        const opcode = this.memory.readWord(pc);
+        const address = this.fetchWord();
+        const value = this.registers.d[reg];
+        
+        // DEBUG: Log the opcode and register extraction
+        console.log(`🔍 [DEBUG] MOVE.L D?,($${address.toString(16).padStart(4, '0')}) - Opcode analysis:`);
+        console.log(`       → PC: 0x${pc.toString(16).padStart(8, '0')}, Opcode: 0x${opcode.toString(16).padStart(4, '0')}`);
+        console.log(`       → Expected pattern: 0x21C0 | reg, Actual: 0x${opcode.toString(16).padStart(4, '0')}`);
+        console.log(`       → Register field: ${reg} (from opcode bits 2-0: ${opcode & 0x7})`);
+        console.log(`       → D0=0x${this.registers.d[0].toString(16).padStart(8, '0')}, D1=0x${this.registers.d[1].toString(16).padStart(8, '0')}`);
+        
+        // Write long value to memory (big-endian)
+        this.memory.writeWord(address, (value >>> 16) & 0xFFFF);
+        this.memory.writeWord(address + 2, value & 0xFFFF);
+        this.setFlags32(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.L D${reg},($${address.toString(16).padStart(4, '0')})        ; Move long to absolute word address`);
+        console.log(`       → Write: D${reg}=0x${value.toString(16).padStart(8, '0')} → ($${address.toString(16).padStart(4, '0')})`);
+        
+        this.cycles += 16;
+        return {
+            name: `MOVE.L D${reg},($${address.toString(16)})`,
+            cycles: 16,
+            asm: `MOVE.L D${reg},($${address.toString(16).padStart(4, '0')})`,
+            description: 'Move long from data register to absolute word address',
+            pc: pc,
+            address: address,
+            value: value
+        };
+    }
+    
+    // MOVE.L Dn,(xxx).L - Move long from data register to absolute long address
+    op_move_l_d_al(reg) {
+        const pc = this.registers.pc - 2;
+        const opcode = this.memory.readWord(pc);
+        const address = this.fetchLong();
+        const value = this.registers.d[reg];
+        
+        // DEBUG: Log the opcode and register extraction
+        console.log(`🔍 [DEBUG] MOVE.L D?,($${address.toString(16).padStart(8, '0')}) - Opcode analysis:`);
+        console.log(`       → PC: 0x${pc.toString(16).padStart(8, '0')}, Opcode: 0x${opcode.toString(16).padStart(4, '0')}`);
+        console.log(`       → Expected pattern: 0x23C0 | reg, Actual: 0x${opcode.toString(16).padStart(4, '0')}`);
+        console.log(`       → Register field: ${reg} (from opcode bits 2-0: ${opcode & 0x7})`);
+        console.log(`       → D0=0x${this.registers.d[0].toString(16).padStart(8, '0')}, D1=0x${this.registers.d[1].toString(16).padStart(8, '0')}`);
+        console.log(`       → Using register D${reg} with value 0x${value.toString(16).padStart(8, '0')}`);
+        
+        // Write long value to memory (big-endian)
+        this.memory.writeWord(address, (value >>> 16) & 0xFFFF);
+        this.memory.writeWord(address + 2, value & 0xFFFF);
+        this.setFlags32(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.L D${reg},($${address.toString(16).padStart(8, '0')})    ; Move long to absolute long address`);
+        console.log(`       → Write: D${reg}=0x${value.toString(16).padStart(8, '0')} → ($${address.toString(16).padStart(8, '0')})`);
+        
+        this.cycles += 20;
+        return {
+            name: `MOVE.L D${reg},($${address.toString(16)})`,
+            cycles: 20,
+            asm: `MOVE.L D${reg},($${address.toString(16).padStart(8, '0')})`,
+            description: 'Move long from data register to absolute long address',
+            pc: pc,
+            address: address,
+            value: value
+        };
+    }
+    
+    // MOVE.L Dn,(An) - Move long from data register to address register indirect
+    op_move_l_d_a_ind(srcReg, dstReg) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[dstReg];
+        const value = this.registers.d[srcReg];
+        
+        // Write long value to memory (big-endian)
+        this.memory.writeWord(address, (value >>> 16) & 0xFFFF);
+        this.memory.writeWord(address + 2, value & 0xFFFF);
+        this.setFlags32(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.L D${srcReg},(A${dstReg})           ; Move long to address register indirect`);
+        console.log(`       → Write: D${srcReg}=0x${value.toString(16).padStart(8, '0')} → (A${dstReg})@0x${address.toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 12;
+        return {
+            name: `MOVE.L D${srcReg},(A${dstReg})`,
+            cycles: 12,
+            asm: `MOVE.L D${srcReg},(A${dstReg})`,
+            description: 'Move long from data register to address register indirect',
+            pc: pc,
+            address: address,
+            value: value
         };
     }
 }
