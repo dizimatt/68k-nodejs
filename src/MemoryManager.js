@@ -293,14 +293,11 @@ class MemoryManager {
             this.initializeKickstart();
         }
         
-        // FORCE: Setup OpenLibrary stub after executable loading
-        this.writeWord(0x20000, 0x203C);       // MOVE.L #immediate,D0
-        this.writeLong(0x20002, 0x12000);      // Fake intuition.library base
-        this.writeWord(0x20006, 0x4E75);       // RTS
-        
-        this.writeWord(this.execBaseAddr - 552, 0x4EF9);        // JMP absolute.L
-        this.writeLong(this.execBaseAddr - 550, 0x20000);       // Point to our stub
-        console.log(`🔧 [EXEC] OpenLibrary vector forced to point to stub at 0x20000`);
+        // Ensure library stubs are properly initialized before executing imported executables
+        if (!this.kickstartRom) {
+            console.log('🔧 [MEMORY] No ROM detected - creating exec.library stubs for imported executable');
+            this.createExecLibraryStubs();
+        }
         
         this.hunks = hunks;
         
@@ -992,35 +989,20 @@ The emulator will validate ROM files on load and report any issues.
         return vectors;
     }
 
-    // *** NEW: Create pure 68k opcode stubs for exec.library functions ***
+    // *** NEW: Create exec.library stubs when ROM vectors not available ***
     createExecLibraryStubs() {
-        console.log('🔧 [EXEC] Writing pure 68k opcode stubs to ROM area...');
+        console.log('🔧 [EXEC] Creating exec.library stubs (ROM vectors not available)...');
         
-        // Create OpenLibrary stub at 0x20000 (RAM space)
-        this.createOpenLibraryStub(0x20000);
+        const execBase = this.execBaseAddr;
+        let stubsCreated = 0;
         
-        // Create CloseLibrary stub at 0x20100  
-        this.createCloseLibraryStub(0x20100);
+        for (const [funcName, offset] of Object.entries(this.EXEC_FUNCTIONS)) {
+            const jumpTableAddr = execBase + offset; // Note: offset is negative
+            this.createStubVector(jumpTableAddr, `exec.${funcName}`);
+            stubsCreated++;
+        }
         
-        // Create AllocMem stub at 0x20200
-        this.createAllocMemStub(0x20200);
-        
-        // Create FreeMem stub at 0x20300
-        this.createFreeMemStub(0x20300);
-        
-        // Create FindTask stub at 0x20400
-        this.createFindTaskStub(0x20400);
-        
-        // Create Permit stub at 0x20500
-        this.createPermitStub(0x20500);
-        
-        // Create Forbid stub at 0x20600
-        this.createForbidStub(0x20600);
-        
-        // Create MakeFunctions stub at 0x20700
-        this.createMakeFunctionsStub(0x20700);
-        
-        console.log('✅ [EXEC] All exec.library stubs implemented as pure 68k opcodes');
+        console.log(`✅ [EXEC] Created ${stubsCreated} exec.library stubs`);
     }
 
     // *** NEW: OpenLibrary implementation (pure 68k opcodes) ***
