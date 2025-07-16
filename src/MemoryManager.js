@@ -1005,40 +1005,43 @@ The emulator will validate ROM files on load and report any issues.
         console.log(`✅ [EXEC] Created ${stubsCreated} exec.library stubs`);
     }
 
-    // *** NEW: OpenLibrary implementation (pure 68k opcodes) ***
+    // *** FIXED: OpenLibrary implementation (pure 68k opcodes) ***
     createOpenLibraryStub(address) {
         console.log(`🔧 [STUB] Creating OpenLibrary stub at 0x${address.toString(16)}`);
         
         // OpenLibrary(libraryName in A1, version in D0) -> library base in D0
         let offset = 0;
         
-        // Enhanced implementation that parses library name from A1
-        // and returns correct library base
+        // SIMPLIFIED implementation: No register save/restore to avoid MOVEM
+        // Just do safe character comparison and return appropriate library base
         
-        // Check first character of library name to determine which library
-        // CMP.B   #'i',(A1)         ; Check if starts with 'i' (intuition.library)
-        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'i',(A1)  
-        this.writeWord(address + offset, 0x0069); offset += 2;  // immediate value 'i'
+        // Load first character of library name
+        // MOVE.B  (A1),D1          ; Load first character into D1
+        this.writeWord(address + offset, 0x1219); offset += 2;  // MOVE.B (A1),D1
         
-        // BEQ.S   return_intuition  ; Branch if equal to intuition
-        const intuitionBranch = offset;
-        this.writeWord(address + offset, 0x670A); offset += 2;  // BEQ.S +10 bytes
+        // Check for 'i' (intuition.library)
+        // CMP.B   #'i',D1          ; Compare with 'i'
+        this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
+        this.writeWord(address + offset, 0x0069); offset += 2;  // immediate 'i'
         
-        // CMP.B   #'d',(A1)         ; Check if starts with 'd' (dos.library)
-        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'d',(A1)
-        this.writeWord(address + offset, 0x0064); offset += 2;  // immediate value 'd'
+        // BEQ.S   return_intuition
+        this.writeWord(address + offset, 0x6710); offset += 2;  // BEQ.S +16 bytes
         
-        // BEQ.S   return_dos        ; Branch if equal to dos
-        const dosBranch = offset;
+        // Check for 'd' (dos.library)
+        // CMP.B   #'d',D1          ; Compare with 'd'
+        this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
+        this.writeWord(address + offset, 0x0064); offset += 2;  // immediate 'd'
+        
+        // BEQ.S   return_dos
+        this.writeWord(address + offset, 0x670C); offset += 2;  // BEQ.S +12 bytes
+        
+        // Check for 'g' (graphics.library)
+        // CMP.B   #'g',D1          ; Compare with 'g'
+        this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
+        this.writeWord(address + offset, 0x0067); offset += 2;  // immediate 'g'
+        
+        // BEQ.S   return_graphics
         this.writeWord(address + offset, 0x6708); offset += 2;  // BEQ.S +8 bytes
-        
-        // CMP.B   #'g',(A1)         ; Check if starts with 'g' (graphics.library)
-        this.writeWord(address + offset, 0x0C51); offset += 2;  // CMP.B #'g',(A1)
-        this.writeWord(address + offset, 0x0067); offset += 2;  // immediate value 'g'
-        
-        // BEQ.S   return_graphics   ; Branch if equal to graphics
-        const graphicsBranch = offset;
-        this.writeWord(address + offset, 0x6706); offset += 2;  // BEQ.S +6 bytes
         
         // Default: return 0 (library not found)
         // MOVEQ   #0,D0            ; Return 0 for unknown library
@@ -1046,25 +1049,28 @@ The emulator will validate ROM files on load and report any issues.
         // RTS
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_graphics: MOVE.L #graphics_base,D0
-        const graphicsBase = this.getLibraryBase('graphics.library') || 0x11000;
+        // return_graphics:
+        const graphicsBase = this.getLibraryBase('graphics.library') || 0x10000;
+        // MOVE.L #graphics_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, graphicsBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_dos: MOVE.L #dos_base,D0  
-        const dosBase = this.getLibraryBase('dos.library') || 0x10000;
+        // return_dos:
+        const dosBase = this.getLibraryBase('dos.library') || 0x11000;
+        // MOVE.L #dos_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, dosBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_intuition: MOVE.L #intuition_base,D0
+        // return_intuition:
         const intuitionBase = this.getLibraryBase('intuition.library') || 0x12000;
+        // MOVE.L #intuition_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, intuitionBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes with name parsing`);
+        console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes with SAFE name parsing (no MOVEM)`);
         console.log(`📍 [STUB] Library bases: intuition=0x${intuitionBase.toString(16)}, dos=0x${dosBase.toString(16)}, graphics=0x${graphicsBase.toString(16)}`);
         console.log(`🎯 [STUB] Stub created at address 0x${address.toString(16)}`);
     }
@@ -1655,7 +1661,13 @@ The emulator will validate ROM files on load and report any issues.
         let vectorsCreated = 0;
         for (const [funcName, offset] of Object.entries(this.EXEC_FUNCTIONS)) {
             const romAddress = execVectorMap.get(offset);
-            if (romAddress) {
+            
+            // FORCE: Always use our stub for OpenLibrary to prevent string corruption
+            if (funcName === 'OpenLibrary') {
+                console.log(`🔧 [FORCE] Using fixed OpenLibrary stub instead of ROM version`);
+                this.createStubVector(execBase + offset, `exec.${funcName}`);
+                vectorsCreated++;
+            } else if (romAddress) {
                 const jumpTableAddr = execBase + offset; // Note: offset is negative
                 this.createJumpVector(jumpTableAddr, romAddress, `exec.${funcName}`);
                 vectorsCreated++;

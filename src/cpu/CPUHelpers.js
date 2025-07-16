@@ -60,6 +60,11 @@ const CPUHelpers = {
     },
     
     // Flag setting helpers
+    setFlags8(value) {
+        this.flag_z = (value & 0xFF) === 0 ? 1 : 0;
+        this.flag_n = (value & 0x80) !== 0 ? 1 : 0;
+    },
+    
     setFlags16(value) {
         this.flag_z = (value & 0xFFFF) === 0 ? 1 : 0;
         this.flag_n = (value & 0x8000) !== 0 ? 1 : 0;
@@ -117,6 +122,13 @@ const CPUHelpers = {
     setFlagsLogic16(result) {
         this.flag_z = (result & 0xFFFF) === 0 ? 1 : 0;
         this.flag_n = (result & 0x8000) !== 0 ? 1 : 0;
+        this.flag_c = 0;
+        this.flag_v = 0;
+    },
+    
+    setFlagsLogic8(result) {
+        this.flag_z = (result & 0xFF) === 0 ? 1 : 0;
+        this.flag_n = (result & 0x80) !== 0 ? 1 : 0;
         this.flag_c = 0;
         this.flag_v = 0;
     },
@@ -182,7 +194,103 @@ const CPUHelpers = {
         this.flag_c = result < 0 ? 1 : 0;
         this.flag_v = ((dst ^ src) & (dst ^ result) & 0x80000000) !== 0 ? 1 : 0;
         this.flag_x = this.flag_c;
-    },    
+    },
+    
+    // Effective Address calculation
+    getEffectiveAddress(mode, reg, size) {
+        switch (mode) {
+            case 0: return this.registers.d[reg]; // Dn
+            case 1: return this.registers.a[reg]; // An
+            case 2: return this.registers.a[reg]; // (An)
+            case 3: return this.registers.a[reg]; // (An)+
+            case 4: return this.registers.a[reg]; // -(An)
+            case 5: {
+                const displacement = this.fetchWord();
+                return this.registers.a[reg] + ((displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement);
+            }
+            case 6: return this.calculateIndexedAddress(reg);
+            case 7: {
+                switch (reg) {
+                    case 0: return this.fetchWord(); // abs.W
+                    case 1: return this.fetchLong(); // abs.L
+                    case 2: {
+                        const displacement = this.fetchWord();
+                        return this.registers.pc + ((displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement);
+                    }
+                    case 3: return this.calculatePCIndexedAddress();
+                    default: return 0;
+                }
+            }
+            default: return 0;
+        }
+    },
+
+    readMemory(address, size) {
+        switch (size) {
+            case 1: return this.memory.readByte(address);
+            case 2: return this.memory.readWord(address);
+            case 4: return this.memory.readLong(address);
+            default: return 0;
+        }
+    },
+
+    writeMemory(address, value, size) {
+        switch (size) {
+            case 1: this.memory.writeByte(address, value); break;
+            case 2: this.memory.writeWord(address, value); break;
+            case 4: this.memory.writeLong(address, value); break;
+        }
+    },
+
+    calculateIndexedAddress(reg) {
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 15) & 1;
+        const indexSize = (extension >> 11) & 1;
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        return this.registers.a[reg] + displacement + indexValue;
+    },
+
+    calculatePCIndexedAddress() {
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 15) & 1;
+        const indexSize = (extension >> 11) & 1;
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        return this.registers.pc + displacement + indexValue;
+    },
+
+    formatEA(mode, reg) {
+        switch (mode) {
+            case 0: return `D${reg}`;           // Dn
+            case 1: return `A${reg}`;           // An
+            case 2: return `(A${reg})`;         // (An)
+            case 3: return `(A${reg})+`;        // (An)+
+            case 4: return `-(A${reg})`;        // -(An)
+            case 5: return `d16(A${reg})`;      // d16(An)
+            case 6: return `d8(A${reg},Xn)`;    // d8(An,Xn)
+            case 7: {
+                switch (reg) {
+                    case 0: return 'abs.W';     // absolute word
+                    case 1: return 'abs.L';     // absolute long
+                    case 2: return 'd16(PC)';   // PC-relative
+                    case 3: return 'd8(PC,Xn)'; // PC-indexed
+                    case 4: return '#imm';      // immediate
+                    default: return `abs.${reg}`;
+                }
+            }
+            default: return `mode${mode}.${reg}`;
+        }
+    },
+    
     // Exception handling
     exception_privilege_violation() {
         console.log('🚨 [CPU] Privilege violation exception');

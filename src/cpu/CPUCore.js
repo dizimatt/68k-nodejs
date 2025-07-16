@@ -65,6 +65,32 @@ class CPUCore {
         if (handler) {
             // *** This is where the enhanced data comes from ***
             const result = handler();
+            
+            // Check if result is valid
+            if (!result || typeof result !== 'object') {
+                console.log(`❌ [CPU] Handler returned invalid result for opcode: 0x${opcode.toString(16).padStart(4, '0')} at PC=0x${pc.toString(16)}`);
+                console.log(`❌ [CPU] Result:`, result);
+                this.running = false;
+                return {
+                    instruction: `ERR_${opcode.toString(16)}`,
+                    cycles: 4,
+                    finished: true,
+                    error: true
+                };
+            }
+            
+            // Check if result has required properties
+            if (!result.name) {
+                console.log(`❌ [CPU] Handler result missing 'name' property for opcode: 0x${opcode.toString(16).padStart(4, '0')} at PC=0x${pc.toString(16)}`);
+                console.log(`❌ [CPU] Result:`, result);
+                this.running = false;
+                return {
+                    instruction: `NONAME_${opcode.toString(16)}`,
+                    cycles: result.cycles || 4,
+                    finished: true,
+                    error: true
+                };
+            }
                         
             this.instructionCount++;
             this.updateStats(result.name);
@@ -184,9 +210,20 @@ class CPUCore {
         // MOVE instructions (0x1000, 0x2000, 0x3000)
         if (high4 >= 1 && high4 <= 3) {
             const size = high4 === 1 ? 'B' : (high4 === 2 ? 'L' : 'W');
+            
+            // Extract addressing mode information
+            const srcMode = (opcode >> 3) & 0x7;
+            const srcReg = opcode & 0x7;
+            const dstMode = (opcode >> 6) & 0x7;
+            const dstReg = (opcode >> 9) & 0x7;
+            
+            // Format source and destination operands
+            const srcEA = this.formatEA(srcMode, srcReg);
+            const dstEA = this.formatEA(dstMode, dstReg);
+            
             return {
-                name: `MOVE.${size}`,
-                asm: `MOVE.${size}`,
+                name: `MOVE.${size} ${srcEA},${dstEA}`,
+                asm: `MOVE.${size} ${srcEA},${dstEA}`,
                 description: `Move ${size === 'B' ? 'byte' : (size === 'W' ? 'word' : 'long')}`
             };
         }
@@ -209,12 +246,76 @@ class CPUCore {
             };
         }
         
+        // RTE
+        if (opcode === 0x4E73) {
+            return {
+                name: 'RTE',
+                asm: 'RTE',
+                description: 'Return from exception'
+            };
+        }
+        
+        // RESET
+        if (opcode === 0x4E70) {
+            return {
+                name: 'RESET',
+                asm: 'RESET',
+                description: 'Reset external devices'
+            };
+        }
+        
         // JSR
         if ((opcode & 0xFFC0) === 0x4E80) {
             return {
                 name: 'JSR',
                 asm: 'JSR',
                 description: 'Jump to subroutine'
+            };
+        }
+        
+        // JSR absolute.W
+        if (opcode === 0x4EB8) {
+            return {
+                name: 'JSR',
+                asm: 'JSR',
+                description: 'Jump to subroutine absolute word'
+            };
+        }
+        
+        // JSR absolute.L
+        if (opcode === 0x4EB9) {
+            return {
+                name: 'JSR',
+                asm: 'JSR',
+                description: 'Jump to subroutine absolute long'
+            };
+        }
+        
+        // JSR (d16,PC)
+        if (opcode === 0x4EBA) {
+            return {
+                name: 'JSR',
+                asm: 'JSR',
+                description: 'Jump to subroutine PC-relative'
+            };
+        }
+        
+        // JMP absolute.L
+        if (opcode === 0x4EF9) {
+            return {
+                name: 'JMP',
+                asm: 'JMP',
+                description: 'Jump to absolute long address'
+            };
+        }
+        
+        // TRAP #vector (0x4E40-0x4E4F)
+        if ((opcode & 0xFFF0) === 0x4E40) {
+            const vector = opcode & 0xF;
+            return {
+                name: `TRAP #${vector}`,
+                asm: `TRAP #${vector}`,
+                description: 'System call trap'
             };
         }
         
@@ -225,7 +326,7 @@ class CPUCore {
             const condNames = ['RA', 'SR', 'HI', 'LS', 'CC', 'CS', 'NE', 'EQ', 'VC', 'VS', 'PL', 'MI', 'GE', 'LT', 'GT', 'LE'];
             return {
                 name: `B${condNames[condition]}`,
-                asm: `B${condNames[condition]} *+${displacement}`,
+                asm: `B${condNames[condition]}`,
                 description: 'Conditional branch'
             };
         }
@@ -247,7 +348,7 @@ class CPUCore {
             const condNames = ['RA', 'SR', 'HI', 'LS', 'CC', 'CS', 'NE', 'EQ', 'VC', 'VS', 'PL', 'MI', 'GE', 'LT', 'GT', 'LE'];
             return {
                 name: `DB${condNames[condition]} D${reg}`,
-                asm: `DB${condNames[condition]} D${reg},*+displacement`,
+                asm: `DB${condNames[condition]} D${reg}`,
                 description: 'Decrement and branch on condition'
             };
         }

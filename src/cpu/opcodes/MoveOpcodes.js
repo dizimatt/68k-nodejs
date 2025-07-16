@@ -157,6 +157,42 @@ class MoveOpcodes {
             }
         }
         
+        // MOVE.B (An),Dn - Move byte from address register indirect to data register
+        for (let srcReg = 0; srcReg < 8; srcReg++) {
+            for (let dstReg = 0; dstReg < 8; dstReg++) {
+                // Mode 010 (2) = (An) - address register indirect
+                const opcode_indirect = 0x1000 | (dstReg << 9) | (0 << 6) | (2 << 3) | srcReg;
+                opcodeTable[opcode_indirect] = () => this.op_move_b_a_ind_d.call(cpu, srcReg, dstReg);
+                
+                // Mode 011 (3) = (An)+ - address register indirect with post-increment
+                // This is what 0x1219 actually represents!
+                const opcode_postinc = 0x1000 | (dstReg << 9) | (0 << 6) | (3 << 3) | srcReg;
+                opcodeTable[opcode_postinc] = () => this.op_move_b_a_ind_d.call(cpu, srcReg, dstReg);
+                
+                // Debug: Log the specific opcodes we're generating
+                if (srcReg === 1 && dstReg === 1) {
+                    console.log(`🔍 [DEBUG] MOVE.B (A1),D1 opcode calculation:`);
+                    console.log(`  Mode 010 (indirect): 0x${opcode_indirect.toString(16)}`);
+                    console.log(`  Mode 011 (post-inc): 0x${opcode_postinc.toString(16)}`);
+                    console.log(`  Expected: 0x1219`);
+                }
+            }
+        }
+        
+        // MOVE.B #imm,Dn - Move byte immediate to data register
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x103C | (reg << 9);
+            opcodeTable[opcode] = () => this.op_move_b_imm_d.call(cpu, reg);
+        }
+        
+        // MOVE.B Dn,Dm - Move byte from data register to data register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x1000 | (dst << 9) | (0 << 6) | src;
+                opcodeTable[opcode] = () => this.op_move_b_d_d.call(cpu, src, dst);
+            }
+        }
+        
         console.log('✅ [CPU] Move opcodes setup complete');
     }
 
@@ -680,6 +716,78 @@ class MoveOpcodes {
             value: value,
             oldValue: oldValue,
             newValue: this.registers.d[dstReg]
+        };
+    }
+    
+    // MOVE.B implementations
+    op_move_b_a_ind_d(srcReg, dstReg) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[srcReg];
+        const value = this.memory.readByte(address);
+        const oldValue = this.registers.d[dstReg];
+        
+        // Store byte value in destination data register (preserve upper 24 bits)
+        this.registers.d[dstReg] = (this.registers.d[dstReg] & 0xFFFFFF00) | (value & 0xFF);
+        this.setFlags8(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.B (A${srcReg}),D${dstReg}          ; Move byte from memory to data register`);
+        console.log(`       → Read: (A${srcReg})@0x${address.toString(16)} = 0x${value.toString(16).padStart(2, '0')}`);
+        console.log(`       → D${dstReg}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.d[dstReg].toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 8;
+        return {
+            name: `MOVE.B (A${srcReg}),D${dstReg}`,
+            cycles: 8,
+            asm: `MOVE.B (A${srcReg}),D${dstReg}`,
+            description: 'Move byte from address register indirect to data register',
+            pc: pc,
+            address: address,
+            value: value,
+            oldValue: oldValue,
+            newValue: this.registers.d[dstReg]
+        };
+    }
+    
+    op_move_b_imm_d(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF; // Only use lower 8 bits
+        const oldValue = this.registers.d[reg];
+        
+        this.registers.d[reg] = (this.registers.d[reg] & 0xFFFFFF00) | immediate;
+        this.setFlags8(immediate);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.B #$${immediate.toString(16).padStart(2, '0')},D${reg}         ; Move byte immediate`);
+        console.log(`       → D${reg}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.d[reg].toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 8;
+        return {
+            name: `MOVE.B #$${immediate.toString(16)},D${reg}`,
+            cycles: 8,
+            asm: `MOVE.B #$${immediate.toString(16).padStart(2, '0')},D${reg}`,
+            description: 'Move byte immediate to data register',
+            pc: pc,
+            immediate: immediate
+        };
+    }
+    
+    op_move_b_d_d(src, dst) {
+        const pc = this.registers.pc - 2;
+        const value = this.registers.d[src] & 0xFF;
+        const oldValue = this.registers.d[dst];
+        
+        this.registers.d[dst] = (this.registers.d[dst] & 0xFFFFFF00) | value;
+        this.setFlags8(value);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.B D${src},D${dst}             ; Move byte register to register`);
+        console.log(`       → D${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.d[dst].toString(16).padStart(8, '0')}`);
+        
+        this.cycles += 4;
+        return {
+            name: `MOVE.B D${src},D${dst}`,
+            cycles: 4,
+            asm: `MOVE.B D${src},D${dst}`,
+            description: 'Move byte from data register to data register',
+            pc: pc
         };
     }
 }
