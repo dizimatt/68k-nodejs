@@ -44,11 +44,11 @@ class BasicOpcodes {
     
     op_rts() {
         const pc = this.registers.pc - 2; // PC was already advanced
-        const returnAddr = this.pullWord();
+        const returnAddr = this.pullLong();
         
         // Debug logging
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: RTS                    ; Return from subroutine`);
-        console.log(`       → Return address: 0x${returnAddr.toString(16).padStart(4, '0')}`);
+        console.log(`       → Return address: 0x${returnAddr.toString(16).padStart(8, '0')}`);
         
         this.registers.pc = returnAddr >>> 0;
         this.cycles += 16;

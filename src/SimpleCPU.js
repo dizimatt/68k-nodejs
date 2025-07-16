@@ -265,7 +265,7 @@ class SimpleCPU {
             console.log(`🟢 [IMPLEMENTED] RTS at PC=0x${oldPC.toString(16).padStart(8, '0')} - Return from subroutine`);
             this.implementedCount++;
             
-            const returnAddress = this.popWordFromStack();
+            const returnAddress = this.popLongFromStack();
             console.log(`🔍 [DEBUG] RTS return address: 0x${returnAddress.toString(16).padStart(4, '0')}`);
             
             // Check if this is our exit pattern
@@ -295,7 +295,7 @@ class SimpleCPU {
             
             console.log(`🟡 [PARTIAL] JSR 0x${target.toString(16).padStart(4, '0')} at PC=0x${oldPC.toString(16).padStart(8, '0')} - Jump to subroutine`);
             
-            this.pushWordToStack(this.registers.pc & 0xFFFF);
+            this.pushLongToStack(this.registers.pc);
             this.registers.pc = this.to32BitAddress(target);
             
             this.implementedCount++;
@@ -308,7 +308,7 @@ class SimpleCPU {
             
             console.log(`🟡 [PARTIAL] JSR.L 0x${target.toString(16).padStart(8, '0')} at PC=0x${oldPC.toString(16).padStart(8, '0')} - Jump to 32-bit address`);
             
-            this.pushWordToStack(this.registers.pc & 0xFFFF);
+            this.pushLongToStack(this.registers.pc);
             this.registers.pc = target;
             
             this.implementedCount++;

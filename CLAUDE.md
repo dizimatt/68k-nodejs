@@ -229,6 +229,8 @@ createStubVector(jumpAddr, funcName) {
     };
     this.createJumpVector(jumpAddr, stubAddr, funcName); // ✅ JMP $00F80500
 }
+**important note**: when calling execbase routine calls, these MUST NOT  be stubbed with javascript routines.
+when the kickstart rom loads, the emulator injects a opcode routine intot he jumptable destinations of each of those library calls (effectively *stubbing* those calls in opcode. this way thsoe execbase routiens can be traced through as standard 68k opcode routines
 ```
 
 **✅ Verified Execution Flow:**
