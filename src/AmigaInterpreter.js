@@ -34,7 +34,7 @@ class AmigaInterpreter {
             this.memory.loadHunks(hunks);
             
             // Initialize CPU
-            this.cpu = new MusashiInspiredCPU(this.memory);
+            this.cpu = new MusashiInspiredCPU(this.memory);            
             
             // Set program counter to first hunk
             if (hunks.length > 0) {

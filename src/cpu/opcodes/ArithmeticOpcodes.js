@@ -113,7 +113,37 @@ class ArithmeticOpcodes {
             const opcode = 0x0C10 | reg;
             opcodeTable[opcode] = () => this.op_cmpi_b_an.call(cpu, reg);
         }
-        
+
+        // CMPI.B #imm,(An)+ - Compare immediate byte with address register indirect post-increment
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C18 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_a_inc.call(cpu, reg);
+        }
+
+        // CMPI.B #imm,-(An) - Compare immediate byte with address register indirect pre-decrement  
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C20 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_a_dec.call(cpu, reg);
+        }
+
+        // CMPI.B #imm,(d16,An) - Compare immediate byte with address register indirect with displacement
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C28 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_a_d16.call(cpu, reg);
+        }
+
+        // CMPI.B #imm,(d8,An,Xn) - Compare immediate byte with address register indirect with index
+        for (let reg = 0; reg < 8; reg++) {
+            const opcode = 0x0C30 | reg;
+            opcodeTable[opcode] = () => this.op_cmpi_b_a_idx.call(cpu, reg);
+        }
+
+        // CMPI.B #imm,(d16,PC) - Compare immediate byte with PC-relative addressing
+        opcodeTable[0x0C3A] = () => this.op_cmpi_b_pc_d16.call(cpu);
+
+        // CMPI.B #imm,(d8,PC,Xn) - Compare immediate byte with PC-relative with index  
+        opcodeTable[0x0C3B] = () => this.op_cmpi_b_pc_idx.call(cpu);
+
         // CMPI.B #imm,abs.W (0x0C38)
         opcodeTable[0x0C38] = () => this.op_cmpi_b_abs_w.call(cpu);
         
@@ -456,6 +486,180 @@ class ArithmeticOpcodes {
             cycles: 20,
             asm: `CMPI.B #$${immediate.toString(16).padStart(2, '0')},$${address.toString(16)}`,
             description: 'Compare immediate byte with absolute long address',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    }
+
+    op_cmpi_b_a_inc(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const address = this.registers.a[reg];
+        const operand = this.memory.readByte(address);
+        
+        // Post-increment address register by 1 for byte operation
+        this.registers.a[reg] = (this.registers.a[reg] + 1) >>> 0;
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},(A${reg})+      ; Compare immediate byte with post-increment`);
+        console.log(`       → Compare: (A${reg})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only], A${reg}++ = 0x${this.registers.a[reg].toString(16)}`);
+        
+        this.cycles += 12;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(A${reg})+`, 
+            cycles: 12,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(A${reg})+`,
+            description: 'Compare immediate byte with post-increment',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    }
+
+    op_cmpi_b_a_dec(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        
+        // Pre-decrement address register by 1 for byte operation
+        this.registers.a[reg] = (this.registers.a[reg] - 1) >>> 0;
+        const address = this.registers.a[reg];
+        const operand = this.memory.readByte(address);
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},-(A${reg})     ; Compare immediate byte with pre-decrement`);
+        console.log(`       → Compare: --A${reg}@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 14;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},-(A${reg})`, 
+            cycles: 14,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},-(A${reg})`,
+            description: 'Compare immediate byte with pre-decrement',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    }
+
+    op_cmpi_b_a_d16(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const displacement = this.fetchWord();
+        const signedDisp = (displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement;
+        const address = (this.registers.a[reg] + signedDisp) >>> 0;
+        const operand = this.memory.readByte(address);
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},A${reg})  ; Compare immediate byte with displacement`);
+        console.log(`       → Compare: (A${reg}+${signedDisp})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 16;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},A${reg})`, 
+            cycles: 16,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},A${reg})`,
+            description: 'Compare immediate byte with displacement',
+            pc: pc,
+            immediate: immediate,
+            displacement: displacement,
+            address: address
+        };
+    }
+
+    op_cmpi_b_a_idx(reg) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 15) & 1;
+        const indexSize = (extension >> 11) & 1;
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        const address = (this.registers.a[reg] + displacement + indexValue) >>> 0;
+        const operand = this.memory.readByte(address);
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg}) ; Compare immediate byte with index`);
+        console.log(`       → Compare: (A${reg}+${displacement}+${indexType ? 'A' : 'D'}${indexReg})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 18;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg})`, 
+            cycles: 18,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},A${reg},${indexType ? 'A' : 'D'}${indexReg})`,
+            description: 'Compare immediate byte with index',
+            pc: pc,
+            immediate: immediate,
+            address: address
+        };
+    }
+
+    op_cmpi_b_pc_d16() {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const displacement = this.fetchWord();
+        const signedDisp = (displacement & 0x8000) ? (displacement | 0xFFFF0000) : displacement;
+        const address = (pc + 2 + signedDisp) >>> 0;
+        const operand = this.memory.readByte(address);
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},PC)    ; Compare immediate byte with PC-relative`);
+        console.log(`       → Compare: (PC+2+${signedDisp})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 16;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},PC)`, 
+            cycles: 16,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${signedDisp},PC)`,
+            description: 'Compare immediate byte with PC-relative',
+            pc: pc,
+            immediate: immediate,
+            displacement: displacement,
+            address: address
+        };
+    }
+
+    op_cmpi_b_pc_idx() {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord() & 0xFF;
+        const extension = this.fetchWord();
+        const displacement = (extension & 0x80) ? (extension | 0xFFFFFF00) : (extension & 0xFF);
+        const indexReg = (extension >> 12) & 7;
+        const indexType = (extension >> 15) & 1;
+        const indexSize = (extension >> 11) & 1;
+        
+        let indexValue = indexType ? this.registers.a[indexReg] : this.registers.d[indexReg];
+        if (!indexSize) indexValue = (indexValue & 0x8000) ? (indexValue | 0xFFFF0000) : (indexValue & 0xFFFF);
+        
+        const address = (pc + 2 + displacement + indexValue) >>> 0;
+        const operand = this.memory.readByte(address);
+        
+        const result = operand - immediate;
+        this.setFlagsCmp8(immediate, operand, result);
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},PC,${indexType ? 'A' : 'D'}${indexReg}) ; Compare immediate byte with PC-relative index`);
+        console.log(`       → Compare: (PC+2+${displacement}+${indexType ? 'A' : 'D'}${indexReg})@0x${address.toString(16)}(${operand}) - #${immediate} = ${result & 0xFF} [flags only]`);
+        
+        this.cycles += 18;
+        return { 
+            name: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},PC,${indexType ? 'A' : 'D'}${indexReg})`, 
+            cycles: 18,
+            asm: `CMPI.B #${immediate.toString(16).padStart(2, '0')},(${displacement},PC,${indexType ? 'A' : 'D'}${indexReg})`,
+            description: 'Compare immediate byte with PC-relative index',
             pc: pc,
             immediate: immediate,
             address: address

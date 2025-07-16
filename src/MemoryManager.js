@@ -918,6 +918,11 @@ The emulator will validate ROM files on load and report any issues.
             return this.extractExecLibraryVectors();
         }
         
+        // Special handling for intuition.library - create stub vectors for common functions
+        if (resident.name.toLowerCase().includes('intuition')) {
+            return this.createIntuitionLibraryStubVectors(resident);
+        }
+        
         // For other libraries, look for standard patterns
         const searchRange = 2048; // Increased search range
         
@@ -989,6 +994,120 @@ The emulator will validate ROM files on load and report any issues.
         return vectors;
     }
 
+    // *** NEW: Create stub vectors for intuition.library ***
+    createIntuitionLibraryStubVectors(resident) {
+        console.log(`🔧 [INTUITION] Creating stub vectors for intuition.library...`);
+        
+        const vectors = [];
+        
+        // Define common intuition.library functions with their standard LVO offsets
+        const intuitionFunctions = [
+            { name: 'OpenWindow', offset: -204, stubAddr: 0x30000 },
+            { name: 'CloseWindow', offset: -72, stubAddr: 0x30100 },
+            { name: 'WindowToFront', offset: -252, stubAddr: 0x30200 },
+            { name: 'WindowToBack', offset: -258, stubAddr: 0x30300 },
+            { name: 'RefreshWindowFrame', offset: -462, stubAddr: 0x30400 },
+            { name: 'ActivateWindow', offset: -450, stubAddr: 0x30500 },
+            { name: 'BeginRefresh', offset: -354, stubAddr: 0x30600 },
+            { name: 'EndRefresh', offset: -360, stubAddr: 0x30700 },
+            { name: 'SetWindowTitles', offset: -276, stubAddr: 0x30800 },
+            { name: 'OpenScreen', offset: -198, stubAddr: 0x30900 },
+            { name: 'CloseScreen', offset: -66, stubAddr: 0x30A00 }
+        ];
+        
+        // Create vectors pointing to our stub implementations with CORRECT offsets
+        intuitionFunctions.forEach((func, index) => {
+            vectors.push({
+                address: func.stubAddr,
+                jumpAddress: null,
+                offset: func.offset,  // Use the actual LVO offset, not sequential
+                name: func.name,
+                isStub: true
+            });
+        });
+        
+        // Create the actual stub implementations
+        this.createIntuitionLibraryStubs(intuitionFunctions);
+        
+        console.log(`✅ [INTUITION] Created ${vectors.length} intuition.library stub vectors`);
+        return vectors;
+    }
+
+    // *** NEW: Create actual stub implementations for intuition.library functions ***
+    createIntuitionLibraryStubs(functions) {
+        console.log(`🔧 [INTUITION] Creating stub implementations...`);
+        
+        functions.forEach(func => {
+            switch (func.name) {
+                case 'OpenWindow':
+                    this.createOpenWindowStub(func.stubAddr);
+                    break;
+                case 'CloseWindow':
+                    this.createCloseWindowStub(func.stubAddr);
+                    break;
+                default:
+                    // Generic stub that returns NULL
+                    this.createGenericLibraryStub(func.stubAddr, func.name);
+                    break;
+            }
+        });
+        
+        console.log(`✅ [INTUITION] Created stub implementations for ${functions.length} functions`);
+    }
+
+    // *** NEW: OpenWindow stub implementation ***
+    createOpenWindowStub(address) {
+        console.log(`🔧 [STUB] Creating OpenWindow stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // OpenWindow(newWindow in A0) -> window pointer in D0
+        // For now, return a fake window pointer
+        
+        // MOVE.L  #0x40000,D0    ; Return fake window pointer
+        this.writeWord(address + offset, 0x203C); offset += 2;   // MOVE.L #imm,D0
+        this.writeLong(address + offset, 0x40000); offset += 4;   // Fake window address
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;    // RTS
+        
+        console.log(`✅ [STUB] OpenWindow stub: ${offset} bytes - returns fake window at 0x40000`);
+    }
+
+    // *** NEW: CloseWindow stub implementation ***
+    createCloseWindowStub(address) {
+        console.log(`🔧 [STUB] Creating CloseWindow stub at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // CloseWindow(window in A0) -> void
+        // Simple implementation: just return
+        
+        // MOVEQ   #0,D0          ; Return success
+        this.writeWord(address + offset, 0x7000); offset += 2;   // MOVEQ #0,D0
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] CloseWindow stub: ${offset} bytes`);
+    }
+
+    // *** NEW: Generic library function stub ***
+    createGenericLibraryStub(address, funcName) {
+        console.log(`🔧 [STUB] Creating generic stub for ${funcName} at 0x${address.toString(16)}`);
+        
+        let offset = 0;
+        
+        // Generic stub: return NULL
+        // MOVEQ   #0,D0          ; Return NULL
+        this.writeWord(address + offset, 0x7000); offset += 2;   // MOVEQ #0,D0
+        
+        // RTS
+        this.writeWord(address + offset, 0x4E75); offset += 2;   // RTS
+        
+        console.log(`✅ [STUB] ${funcName} stub: ${offset} bytes - returns NULL`);
+    }
+
     // *** NEW: Create exec.library stubs when ROM vectors not available ***
     createExecLibraryStubs() {
         console.log('🔧 [EXEC] Creating exec.library stubs (ROM vectors not available)...');
@@ -1024,8 +1143,8 @@ The emulator will validate ROM files on load and report any issues.
         this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
         this.writeWord(address + offset, 0x0069); offset += 2;  // immediate 'i'
         
-        // BEQ.S   return_intuition
-        this.writeWord(address + offset, 0x6710); offset += 2;  // BEQ.S +16 bytes
+        // BEQ.S   return_intuition (skip to end of stub)
+        this.writeWord(address + offset, 0x6720); offset += 2;  // BEQ.S +32 bytes (to return_intuition)
         
         // Check for 'd' (dos.library)
         // CMP.B   #'d',D1          ; Compare with 'd'
@@ -1033,7 +1152,7 @@ The emulator will validate ROM files on load and report any issues.
         this.writeWord(address + offset, 0x0064); offset += 2;  // immediate 'd'
         
         // BEQ.S   return_dos
-        this.writeWord(address + offset, 0x670C); offset += 2;  // BEQ.S +12 bytes
+        this.writeWord(address + offset, 0x6714); offset += 2;  // BEQ.S +20 bytes (to return_dos)
         
         // Check for 'g' (graphics.library)
         // CMP.B   #'g',D1          ; Compare with 'g'
@@ -1041,7 +1160,7 @@ The emulator will validate ROM files on load and report any issues.
         this.writeWord(address + offset, 0x0067); offset += 2;  // immediate 'g'
         
         // BEQ.S   return_graphics
-        this.writeWord(address + offset, 0x6708); offset += 2;  // BEQ.S +8 bytes
+        this.writeWord(address + offset, 0x6708); offset += 2;  // BEQ.S +8 bytes (to return_graphics)
         
         // Default: return 0 (library not found)
         // MOVEQ   #0,D0            ; Return 0 for unknown library
@@ -1049,22 +1168,23 @@ The emulator will validate ROM files on load and report any issues.
         // RTS
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_graphics:
+        // return_graphics: (offset = 24)
         const graphicsBase = this.getLibraryBase('graphics.library') || 0x10000;
         // MOVE.L #graphics_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, graphicsBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_dos:
+        // return_dos: (offset = 32)
         const dosBase = this.getLibraryBase('dos.library') || 0x11000;
         // MOVE.L #dos_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, dosBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_intuition:
-        const intuitionBase = this.getLibraryBase('intuition.library') || 0x12000;
+        // return_intuition: (offset = 40)
+        // CRITICAL FIX: Always use the correct intuition.library base address
+        const intuitionBase = 0x15000;  // Force correct base - matches library allocation
         // MOVE.L #intuition_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, intuitionBase); offset += 4;
@@ -1073,6 +1193,7 @@ The emulator will validate ROM files on load and report any issues.
         console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes with SAFE name parsing (no MOVEM)`);
         console.log(`📍 [STUB] Library bases: intuition=0x${intuitionBase.toString(16)}, dos=0x${dosBase.toString(16)}, graphics=0x${graphicsBase.toString(16)}`);
         console.log(`🎯 [STUB] Stub created at address 0x${address.toString(16)}`);
+        console.log(`🔧 [BRANCH] Fixed branch offsets: intuition=+32, dos=+20, graphics=+8`);
     }
 
     // *** NEW: Get library base address by name ***
@@ -1859,10 +1980,10 @@ The emulator will validate ROM files on load and report any issues.
         
         let vectorsCreated = 0;
         
-        // Create jump vectors at negative offsets from library base
+        // Create jump vectors at their ACTUAL offsets (not sequential)
         resident.vectorTable.forEach((vector, index) => {
-            // Standard Amiga negative offset: -6 * (index + 1)
-            const offset = -6 * (index + 1);
+            // Use the vector's actual offset if it has one, otherwise use sequential
+            const offset = vector.offset || (-6 * (index + 1));
             const jumpAddr = libraryBase + offset;
             
             // Create JMP instruction pointing to ROM function

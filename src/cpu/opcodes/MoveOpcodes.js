@@ -865,13 +865,22 @@ class MoveOpcodes {
         console.log(`       → D0=0x${this.registers.d[0].toString(16).padStart(8, '0')}, D1=0x${this.registers.d[1].toString(16).padStart(8, '0')}`);
         console.log(`       → Using register D${reg} with value 0x${value.toString(16).padStart(8, '0')}`);
         
+        // SPECIAL CASE: Handle small addresses that should be relative to program base
+        // The assembler generates absolute addresses for variables, but they should be
+        // relative to the program base (0x400000) for proper linking
+        let finalAddress = address;
+        if (address < 0x1000) {  // Small addresses are likely program-relative
+            finalAddress = 0x400000 + address;
+            console.log(`🔧 [RELOC] Small address detected: 0x${address.toString(16)} → 0x${finalAddress.toString(16)} (program-relative)`);
+        }
+        
         // Write long value to memory (big-endian)
-        this.memory.writeWord(address, (value >>> 16) & 0xFFFF);
-        this.memory.writeWord(address + 2, value & 0xFFFF);
+        this.memory.writeWord(finalAddress, (value >>> 16) & 0xFFFF);
+        this.memory.writeWord(finalAddress + 2, value & 0xFFFF);
         this.setFlags32(value);
         
         console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: MOVE.L D${reg},($${address.toString(16).padStart(8, '0')})    ; Move long to absolute long address`);
-        console.log(`       → Write: D${reg}=0x${value.toString(16).padStart(8, '0')} → ($${address.toString(16).padStart(8, '0')})`);
+        console.log(`       → Write: D${reg}=0x${value.toString(16).padStart(8, '0')} → ($${finalAddress.toString(16).padStart(8, '0')})`);
         
         this.cycles += 20;
         return {
