@@ -149,6 +149,126 @@ class ArithmeticOpcodes {
         
         // CMPI.B #imm,abs.L (0x0C39)  
         opcodeTable[0x0C39] = () => this.op_cmpi_b_abs_l.call(cpu);
+
+        // ADDA.W Dn,An - Add address word from data register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD0C0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_w_d_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.W An,Am - Add address word from address register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD0C8 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_w_a_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.W (An),Am - Add address word from memory
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD0D0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_w_an_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.W #imm,An - Add address word immediate
+        for (let dst = 0; dst < 8; dst++) {
+            const opcode = 0xD0FC | (dst << 9);
+            opcodeTable[opcode] = () => this.op_adda_w_imm_a.call(cpu, dst);
+        }
+
+        // ADDA.L Dn,An - Add address long from data register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD1C0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_l_d_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.L An,Am - Add address long from address register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD1C8 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_l_a_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.L (An),Am - Add address long from memory
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0xD1D0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_adda_l_an_a.call(cpu, src, dst);
+            }
+        }
+
+        // ADDA.L #imm,An - Add address long immediate
+        for (let dst = 0; dst < 8; dst++) {
+            const opcode = 0xD1FC | (dst << 9);
+            opcodeTable[opcode] = () => this.op_adda_l_imm_a.call(cpu, dst);
+        }
+
+        // SUBA.W Dn,An - Subtract address word from data register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x90C0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_w_d_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.W An,Am - Subtract address word from address register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x90C8 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_w_a_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.W (An),Am - Subtract address word from memory
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x90D0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_w_an_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.W #imm,An - Subtract address word immediate
+        for (let dst = 0; dst < 8; dst++) {
+            const opcode = 0x90FC | (dst << 9);
+            opcodeTable[opcode] = () => this.op_suba_w_imm_a.call(cpu, dst);
+        }
+
+        // SUBA.L Dn,An - Subtract address long from data register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x91C0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_l_d_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.L An,Am - Subtract address long from address register
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x91C8 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_l_a_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.L (An),Am - Subtract address long from memory
+        for (let src = 0; src < 8; src++) {
+            for (let dst = 0; dst < 8; dst++) {
+                const opcode = 0x91D0 | (dst << 9) | src;
+                opcodeTable[opcode] = () => this.op_suba_l_an_a.call(cpu, src, dst);
+            }
+        }
+
+        // SUBA.L #imm,An - Subtract address long immediate
+        for (let dst = 0; dst < 8; dst++) {
+            const opcode = 0x91FC | (dst << 9);
+            opcodeTable[opcode] = () => this.op_suba_l_imm_a.call(cpu, dst);
+        }
         
         console.log('✅ [CPU] Arithmetic opcodes setup complete');
     }
@@ -663,6 +783,380 @@ class ArithmeticOpcodes {
             pc: pc,
             immediate: immediate,
             address: address
+        };
+    }
+
+    // ADDA implementations - Add Address
+    op_adda_w_d_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.d[src] & 0xFFFF;
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.W D${src},A${dst}            ; Add address word from data register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ D${src}=${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `ADDA.W D${src},A${dst}`, 
+            cycles: 8,
+            asm: `ADDA.W D${src},A${dst}`,
+            description: 'Add address word from data register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_adda_w_a_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.a[src] & 0xFFFF;
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.W A${src},A${dst}            ; Add address word from address register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ A${src}=${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `ADDA.W A${src},A${dst}`, 
+            cycles: 8,
+            asm: `ADDA.W A${src},A${dst}`,
+            description: 'Add address word from address register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_adda_w_an_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[src];
+        const srcVal = this.memory.readWord(address);
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.W (A${src}),A${dst}          ; Add address word from memory`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ (A${src})@0x${address.toString(16)}=${signExtended})`);
+        
+        this.cycles += 12;
+        return { 
+            name: `ADDA.W (A${src}),A${dst}`, 
+            cycles: 12,
+            asm: `ADDA.W (A${src}),A${dst}`,
+            description: 'Add address word from memory',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst],
+            address: address
+        };
+    }
+
+    op_adda_w_imm_a(dst) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord();
+        const signExtended = (immediate & 0x8000) ? (immediate | 0xFFFF0000) : immediate;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}         ; Add address word immediate`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ #${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `ADDA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}`, 
+            cycles: 8,
+            asm: `ADDA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}`,
+            description: 'Add address word immediate',
+            pc: pc,
+            immediate: immediate,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_adda_l_d_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.d[src] >>> 0;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.L D${src},A${dst}            ; Add address long from data register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ D${src}=${srcVal})`);
+        
+        this.cycles += 6;
+        return { 
+            name: `ADDA.L D${src},A${dst}`, 
+            cycles: 6,
+            asm: `ADDA.L D${src},A${dst}`,
+            description: 'Add address long from data register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_adda_l_a_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.a[src] >>> 0;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.L A${src},A${dst}            ; Add address long from address register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ A${src}=${srcVal})`);
+        
+        this.cycles += 6;
+        return { 
+            name: `ADDA.L A${src},A${dst}`, 
+            cycles: 6,
+            asm: `ADDA.L A${src},A${dst}`,
+            description: 'Add address long from address register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_adda_l_an_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[src];
+        const srcVal = this.memory.readLong(address);
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.L (A${src}),A${dst}          ; Add address long from memory`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ (A${src})@0x${address.toString(16)}=${srcVal})`);
+        
+        this.cycles += 14;
+        return { 
+            name: `ADDA.L (A${src}),A${dst}`, 
+            cycles: 14,
+            asm: `ADDA.L (A${src}),A${dst}`,
+            description: 'Add address long from memory',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst],
+            address: address
+        };
+    }
+
+    op_adda_l_imm_a(dst) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchLong();
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] + immediate) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: ADDA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}     ; Add address long immediate`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (+ #${immediate})`);
+        
+        this.cycles += 16;
+        return { 
+            name: `ADDA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}`, 
+            cycles: 16,
+            asm: `ADDA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}`,
+            description: 'Add address long immediate',
+            pc: pc,
+            immediate: immediate,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    // SUBA implementations - Subtract Address
+    op_suba_w_d_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.d[src] & 0xFFFF;
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.W D${src},A${dst}            ; Subtract address word from data register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- D${src}=${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `SUBA.W D${src},A${dst}`, 
+            cycles: 8,
+            asm: `SUBA.W D${src},A${dst}`,
+            description: 'Subtract address word from data register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_suba_w_a_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.a[src] & 0xFFFF;
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.W A${src},A${dst}            ; Subtract address word from address register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- A${src}=${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `SUBA.W A${src},A${dst}`, 
+            cycles: 8,
+            asm: `SUBA.W A${src},A${dst}`,
+            description: 'Subtract address word from address register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_suba_w_an_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[src];
+        const srcVal = this.memory.readWord(address);
+        const signExtended = (srcVal & 0x8000) ? (srcVal | 0xFFFF0000) : srcVal;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.W (A${src}),A${dst}          ; Subtract address word from memory`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- (A${src})@0x${address.toString(16)}=${signExtended})`);
+        
+        this.cycles += 12;
+        return { 
+            name: `SUBA.W (A${src}),A${dst}`, 
+            cycles: 12,
+            asm: `SUBA.W (A${src}),A${dst}`,
+            description: 'Subtract address word from memory',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst],
+            address: address
+        };
+    }
+
+    op_suba_w_imm_a(dst) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchWord();
+        const signExtended = (immediate & 0x8000) ? (immediate | 0xFFFF0000) : immediate;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - signExtended) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}         ; Subtract address word immediate`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- #${signExtended})`);
+        
+        this.cycles += 8;
+        return { 
+            name: `SUBA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}`, 
+            cycles: 8,
+            asm: `SUBA.W #$${immediate.toString(16).padStart(4, '0')},A${dst}`,
+            description: 'Subtract address word immediate',
+            pc: pc,
+            immediate: immediate,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_suba_l_d_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.d[src] >>> 0;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.L D${src},A${dst}            ; Subtract address long from data register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- D${src}=${srcVal})`);
+        
+        this.cycles += 6;
+        return { 
+            name: `SUBA.L D${src},A${dst}`, 
+            cycles: 6,
+            asm: `SUBA.L D${src},A${dst}`,
+            description: 'Subtract address long from data register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_suba_l_a_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const srcVal = this.registers.a[src] >>> 0;
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.L A${src},A${dst}            ; Subtract address long from address register`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- A${src}=${srcVal})`);
+        
+        this.cycles += 6;
+        return { 
+            name: `SUBA.L A${src},A${dst}`, 
+            cycles: 6,
+            asm: `SUBA.L A${src},A${dst}`,
+            description: 'Subtract address long from address register',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
+        };
+    }
+
+    op_suba_l_an_a(src, dst) {
+        const pc = this.registers.pc - 2;
+        const address = this.registers.a[src];
+        const srcVal = this.memory.readLong(address);
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - srcVal) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.L (A${src}),A${dst}          ; Subtract address long from memory`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- (A${src})@0x${address.toString(16)}=${srcVal})`);
+        
+        this.cycles += 14;
+        return { 
+            name: `SUBA.L (A${src}),A${dst}`, 
+            cycles: 14,
+            asm: `SUBA.L (A${src}),A${dst}`,
+            description: 'Subtract address long from memory',
+            pc: pc,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst],
+            address: address
+        };
+    }
+
+    op_suba_l_imm_a(dst) {
+        const pc = this.registers.pc - 2;
+        const immediate = this.fetchLong();
+        const oldValue = this.registers.a[dst];
+        
+        this.registers.a[dst] = (this.registers.a[dst] - immediate) >>> 0;
+        
+        console.log(`🟢 [EXEC] 0x${pc.toString(16).padStart(8, '0')}: SUBA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}     ; Subtract address long immediate`);
+        console.log(`       → A${dst}: 0x${oldValue.toString(16).padStart(8, '0')} → 0x${this.registers.a[dst].toString(16).padStart(8, '0')} (- #${immediate})`);
+        
+        this.cycles += 16;
+        return { 
+            name: `SUBA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}`, 
+            cycles: 16,
+            asm: `SUBA.L #$${immediate.toString(16).padStart(8, '0')},A${dst}`,
+            description: 'Subtract address long immediate',
+            pc: pc,
+            immediate: immediate,
+            oldValue: oldValue,
+            newValue: this.registers.a[dst]
         };
     }
 }

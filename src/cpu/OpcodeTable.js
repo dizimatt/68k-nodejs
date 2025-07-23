@@ -9,6 +9,11 @@ const MoveOpcodes = require('./opcodes/MoveOpcodes');
 const BranchOpcodes = require('./opcodes/BranchOpcodes');
 const BasicOpcodes  = require('./opcodes/BasicOpcodes');
 const ArithmeticOpcodes = require('./opcodes/ArithmeticOpcodes');
+const CriticalOpcodes = require('./opcodes/CriticalOpcodes');
+const HighPriorityOpcodes = require('./opcodes/HighPriorityOpcodes');
+const MediumPriorityOpcodes = require('./opcodes/MediumPriorityOpcodes');
+const LowPriorityOpcodes = require('./opcodes/LowPriorityOpcodes');
+const Mc68020ExtendedOpcodes = require('./opcodes/Mc68020ExtendedOpcodes');
 const ExtendedImmediateOpcodes = require('./opcodes/ExtendedImmediateOpcodes');
 const ExtendedAddressingOpcodes = require('./opcodes/ExtendedAddressingOpcodes');
 const ExtendedBitOpcodes = require('./opcodes/ExtendedBitOpcodes');
@@ -38,6 +43,11 @@ class OpcodeTable {
             new BranchOpcodes(this.cpu),
             new BasicOpcodes(this.cpu),
             new ArithmeticOpcodes(this.cpu),
+            new CriticalOpcodes(this.cpu),
+            new HighPriorityOpcodes(this.cpu),
+            new MediumPriorityOpcodes(this.cpu),
+            new LowPriorityOpcodes(this.cpu),
+            new Mc68020ExtendedOpcodes(this.cpu),
             new ExtendedImmediateOpcodes(this.cpu),
             new ExtendedAddressingOpcodes(this.cpu),
             new ExtendedBitOpcodes(this.cpu)
