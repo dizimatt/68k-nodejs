@@ -498,6 +498,105 @@ app.get('/debug/next-instruction', (req, res) => {
 });
 
 
+// Debug endpoint to check library processing
+app.get('/debug/libraries', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+        
+        const memory = interpreter.memory;
+        const libraries = [];
+        
+        // Check what libraries are in residentModules
+        for (const resident of memory.residentModules) {
+            if (resident.isLibrary) {
+                libraries.push({
+                    name: resident.name,
+                    hasVectorTable: !!resident.vectorTable,
+                    vectorCount: resident.vectorTable ? resident.vectorTable.length : 0,
+                    firstVector: resident.vectorTable && resident.vectorTable.length > 0 ? {
+                        name: resident.vectorTable[0].name,
+                        address: `0x${resident.vectorTable[0].address.toString(16)}`,
+                        isROMCode: resident.vectorTable[0].isROMCode
+                    } : null
+                });
+            }
+        }
+        
+        // Get actual library base addresses
+        const baseAddresses = {};
+        if (memory.libraryBases) {
+            for (const [libName, libInfo] of memory.libraryBases) {
+                baseAddresses[libName] = `0x${libInfo.baseAddress.toString(16)}`;
+            }
+        }
+        
+        res.json({
+            success: true,
+            libraryCount: libraries.length,
+            libraries: libraries,
+            libraryBases: memory.libraryBases ? Array.from(memory.libraryBases.keys()) : [],
+            baseAddresses: baseAddresses
+        });
+        
+    } catch (error) {
+        console.error('Library debug error:', error);
+        res.status(500).json({ error: 'Failed to debug libraries: ' + error.message });
+    }
+});
+
+// Test endpoint to trigger ROM vector re-extraction
+app.post('/test/reinit-vectors', (req, res) => {
+    try {
+        console.log('🔧 [TEST] Re-initializing library vectors...');
+        
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Memory manager not initialized' });
+        }
+        
+        // Force re-parse of library vectors for intuition
+        const memory = interpreter.memory;
+        
+        // Find intuition.library in resident modules
+        let intuitionResident = null;
+        for (const resident of memory.residentModules) {
+            if (resident.name && resident.name.toLowerCase().includes('intuition')) {
+                intuitionResident = resident;
+                break;
+            }
+        }
+        
+        if (!intuitionResident) {
+            return res.status(404).json({ error: 'intuition.library not found in resident modules' });
+        }
+        
+        console.log(`🔧 [TEST] Found intuition.library at 0x${intuitionResident.address.toString(16)}`);
+        
+        // Re-extract vectors using the new fallback logic
+        const vectors = memory.extractIntuitionLibraryROMVectors(intuitionResident);
+        
+        // Update the resident module
+        intuitionResident.vectorTable = vectors;
+        
+        res.json({
+            success: true,
+            message: 'Intuition vectors re-extracted',
+            vectorCount: vectors.length,
+            vectors: vectors.slice(0, 5).map(v => ({
+                name: v.name,
+                address: `0x${v.address.toString(16)}`,
+                offset: v.offset,
+                isROMCode: v.isROMCode
+            }))
+        });
+        
+    } catch (error) {
+        console.error('Vector re-init error:', error);
+        res.status(500).json({ error: 'Failed to re-initialize vectors: ' + error.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Amiga Executable Runner server running on port ${PORT}`);
     console.log(`Open http://localhost:${PORT} to upload and run Amiga executables`);
