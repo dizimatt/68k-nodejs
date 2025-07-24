@@ -511,15 +511,20 @@ app.get('/debug/libraries', (req, res) => {
         // Check what libraries are in residentModules
         for (const resident of memory.residentModules) {
             if (resident.isLibrary) {
+                // Get all vectors with their jump addresses
+                const allVectors = resident.vectorTable ? resident.vectorTable.map(vector => ({
+                    name: vector.name,
+                    romAddress: `0x${vector.address.toString(16)}`,
+                    jumpAddress: vector.jumpAddress ? `0x${vector.jumpAddress.toString(16)}` : null,
+                    offset: vector.offset,
+                    isROMCode: vector.isROMCode
+                })) : [];
+                
                 libraries.push({
                     name: resident.name,
                     hasVectorTable: !!resident.vectorTable,
                     vectorCount: resident.vectorTable ? resident.vectorTable.length : 0,
-                    firstVector: resident.vectorTable && resident.vectorTable.length > 0 ? {
-                        name: resident.vectorTable[0].name,
-                        address: `0x${resident.vectorTable[0].address.toString(16)}`,
-                        isROMCode: resident.vectorTable[0].isROMCode
-                    } : null
+                    vectors: allVectors
                 });
             }
         }
