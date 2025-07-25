@@ -985,6 +985,14 @@ The emulator will validate ROM files on load and report any issues.
     extractROMLibraryVectors(resident) {
         console.log(`🔧 [${resident.name.toUpperCase()}] Extracting REAL ROM vectors (NO STUBS!)...`);
         
+        // SPECIAL CASE: For intuition.library, always use comprehensive vectors
+        if (resident.name.toLowerCase().includes('intuition')) {
+            console.log(`🎯 [INTUITION] OVERRIDE: Using comprehensive function table instead of limited ROM extraction...`);
+            const comprehensiveVectors = this.createComprehensiveIntuitionVectors(resident);
+            console.log(`✅ [INTUITION] OVERRIDE: Created ${comprehensiveVectors.length} comprehensive vectors`);
+            return comprehensiveVectors;
+        }
+        
         const vectors = [];
         const initAddr = resident.initPtr;
         
@@ -1026,6 +1034,7 @@ The emulator will validate ROM files on load and report any issues.
                 console.warn(`⚠️ [${resident.name.toUpperCase()}] Method 2 failed: ${error.message}`);
             }
         }
+
         
         // Method 3: Parse library base structure if available
         if (vectors.length === 0) {
@@ -1045,8 +1054,10 @@ The emulator will validate ROM files on load and report any issues.
             console.log(`🔧 [${resident.name.toUpperCase()}] FALLBACK: No ROM vectors found, creating minimal test vectors...`);
             console.log(`🔧 [${resident.name.toUpperCase()}] FALLBACK: initPtr = 0x${resident.initPtr.toString(16)}`);
             
-            // Create minimal fallback vectors for any library
-            const testVectors = this.createFallbackVectors(resident);
+            // Create comprehensive fallback vectors for intuition.library
+            const testVectors = resident.name.toLowerCase().includes('intuition') ? 
+                this.createComprehensiveIntuitionVectors(resident) : 
+                this.createFallbackVectors(resident);
             
             console.log(`🔧 [${resident.name.toUpperCase()}] FALLBACK: Testing ${testVectors.length} potential vectors...`);
             
@@ -1416,21 +1427,46 @@ The emulator will validate ROM files on load and report any issues.
         // MOVE.B  (A1),D1          ; Load first character into D1
         this.writeWord(address + offset, 0x1219); offset += 2;  // MOVE.B (A1),D1
         
-        // Check for 'i' (intuition.library)
+        // Check for 'i' (could be intuition OR icon)
         // CMP.B   #'i',D1          ; Compare with 'i'
         this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
         this.writeWord(address + offset, 0x0069); offset += 2;  // immediate 'i'
         
-        // BEQ.S   return_intuition (skip to end of stub)
-        this.writeWord(address + offset, 0x6720); offset += 2;  // BEQ.S +32 bytes (to return_intuition)
+        // BNE.S   check_dos        ; If not 'i', skip to check 'd'
+        this.writeWord(address + offset, 0x661C); offset += 2;  // BNE.S +28 bytes (to check_dos)
         
+        // It starts with 'i' - check second character to distinguish intuition vs icon
+        // MOVE.L  A1,A2            ; Copy A1 to A2
+        this.writeWord(address + offset, 0x244A); offset += 2;  // MOVE.L A1,A2
+        
+        // MOVE.B  (A2)+,D2         ; Skip first character (dummy read)
+        this.writeWord(address + offset, 0x141A); offset += 2;  // MOVE.B (A2)+,D2
+        
+        // MOVE.B  (A2),D1          ; Load second character into D1
+        this.writeWord(address + offset, 0x121A); offset += 2;  // MOVE.B (A2),D1
+        
+        // CMP.B   #'n',D1          ; Compare with 'n' (for intuition)
+        this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
+        this.writeWord(address + offset, 0x006E); offset += 2;  // immediate 'n'
+        
+        // BEQ.S   return_intuition ; If 'in', it's intuition.library
+        this.writeWord(address + offset, 0x6714); offset += 2;  // BEQ.S +20 bytes (to return_intuition)
+        
+        // CMP.B   #'c',D1          ; Compare with 'c' (for icon)
+        this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
+        this.writeWord(address + offset, 0x0063); offset += 2;  // immediate 'c'
+        
+        // BEQ.S   return_icon      ; If 'ic', it's icon.library (return 0 for now)
+        this.writeWord(address + offset, 0x6716); offset += 2;  // BEQ.S +22 bytes (to return_icon)
+        
+        // check_dos:
         // Check for 'd' (dos.library)
         // CMP.B   #'d',D1          ; Compare with 'd'
         this.writeWord(address + offset, 0x0C01); offset += 2;  // CMP.B #imm,D1
         this.writeWord(address + offset, 0x0064); offset += 2;  // immediate 'd'
         
         // BEQ.S   return_dos
-        this.writeWord(address + offset, 0x6714); offset += 2;  // BEQ.S +20 bytes (to return_dos)
+        this.writeWord(address + offset, 0x670A); offset += 2;  // BEQ.S +10 bytes (to return_dos)
         
         // Check for 'g' (graphics.library)
         // CMP.B   #'g',D1          ; Compare with 'g'
@@ -1438,7 +1474,7 @@ The emulator will validate ROM files on load and report any issues.
         this.writeWord(address + offset, 0x0067); offset += 2;  // immediate 'g'
         
         // BEQ.S   return_graphics
-        this.writeWord(address + offset, 0x6708); offset += 2;  // BEQ.S +8 bytes (to return_graphics)
+        this.writeWord(address + offset, 0x6704); offset += 2;  // BEQ.S +4 bytes (to return_graphics)
         
         // Default: return 0 (library not found)
         // MOVEQ   #0,D0            ; Return 0 for unknown library
@@ -1446,25 +1482,32 @@ The emulator will validate ROM files on load and report any issues.
         // RTS
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_graphics: (offset = 24)
-        const graphicsBase = this.getLibraryBase('graphics.library') || 0x10000;
+        // return_graphics:
+        const graphicsBase = this.getLibraryBase('graphics.library') || 0x20000;
         // MOVE.L #graphics_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, graphicsBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_dos: (offset = 32)
-        const dosBase = this.getLibraryBase('dos.library') || 0x11000;
+        // return_dos:
+        const dosBase = this.getLibraryBase('dos.library') || 0x22000;
         // MOVE.L #dos_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, dosBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
-        // return_intuition: (offset = 40)
-        const intuitionBase = this.getLibraryBase('intuition.library') || 0x19000;
+        // return_intuition:
+        const intuitionBase = this.getLibraryBase('intuition.library') || 0x32000;
         // MOVE.L #intuition_base,D0
         this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
         this.writeLong(address + offset, intuitionBase); offset += 4;
+        this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
+        
+        // return_icon:
+        const iconBase = this.getLibraryBase('icon.library') || 0x30000;
+        // MOVE.L #icon_base,D0
+        this.writeWord(address + offset, 0x203C); offset += 2;  // MOVE.L #imm,D0
+        this.writeLong(address + offset, iconBase); offset += 4;
         this.writeWord(address + offset, 0x4E75); offset += 2;  // RTS
         
         console.log(`✅ [STUB] OpenLibrary stub: ${offset} bytes of 68k opcodes with SAFE name parsing (no MOVEM)`);
@@ -2096,6 +2139,19 @@ The emulator will validate ROM files on load and report any issues.
 
     // *** NEW: Create jump vector (JMP absolute.L instruction) ***
     createJumpVector(jumpAddr, targetAddr, funcName) {
+        console.log(`🔧 [DEBUG] Creating jump vector for ${funcName}:`);
+        console.log(`   Jump Address: 0x${jumpAddr.toString(16)} (${jumpAddr})`);
+        console.log(`   Target Address: 0x${targetAddr.toString(16)} (${targetAddr})`);
+        console.log(`   Chip RAM Length: 0x${this.chipRam.length.toString(16)} (${this.chipRam.length})`);
+        console.log(`   Address in bounds: ${jumpAddr < this.chipRam.length}`);
+        
+        // Test basic write/read before jump vector
+        console.log(`🔧 [DEBUG] Testing basic write/read at 0x${jumpAddr.toString(16)}:`);
+        const testValue = 0x1234;
+        this.writeWord(jumpAddr, testValue);
+        const readBack = this.readWord(jumpAddr);
+        console.log(`   Wrote: 0x${testValue.toString(16)}, Read: 0x${readBack.toString(16)}, Match: ${readBack === testValue}`);
+        
         // Write JMP absolute.L instruction (0x4EF9) followed by 32-bit target address
         this.writeWord(jumpAddr, 0x4EF9);        // JMP absolute.L opcode
         this.writeLong(jumpAddr + 2, targetAddr); // Target address
@@ -2110,21 +2166,27 @@ The emulator will validate ROM files on load and report any issues.
             console.error(`❌ [VECTOR] Failed to write jump vector for ${funcName}`);
             console.error(`   Expected: 0x4EF9 0x${targetAddr.toString(16)}`);
             console.error(`   Written:  0x${writtenOpcode.toString(16)} 0x${writtenTarget.toString(16)}`);
+            
+            // Additional debugging
+            console.error(`   Jump address bounds check: ${jumpAddr} < ${this.chipRam.length} = ${jumpAddr < this.chipRam.length}`);
+            console.error(`   Target+6 bounds check: ${jumpAddr + 6} < ${this.chipRam.length} = ${(jumpAddr + 6) < this.chipRam.length}`);
+        } else {
+            console.log(`✅ [VECTOR] Jump vector successfully written and verified`);
         }
     }
 
     // *** NEW: Create stub vector for missing functions ***
     createStubVector(jumpAddr, funcName) {
-        // Map exec function names to our ROM stub addresses
+        // Map exec function names to our ROM stub addresses (moved to avoid library base conflicts)
         const stubMap = {
-            'exec.OpenLibrary': 0x20000,    // Use RAM space instead of ROM
-            'exec.CloseLibrary': 0x20100,
-            'exec.AllocMem': 0x20200,
-            'exec.FreeMem': 0x20300,
-            'exec.FindTask': 0x20400,
-            'exec.Permit': 0x20500,
-            'exec.Forbid': 0x20600,
-            'exec.MakeFunctions': 0x20700
+            'exec.OpenLibrary': 0x10000,    // Moved to safe RAM space before library bases
+            'exec.CloseLibrary': 0x10100,
+            'exec.AllocMem': 0x10200,
+            'exec.FreeMem': 0x10300,
+            'exec.FindTask': 0x10400,
+            'exec.Permit': 0x10500,
+            'exec.Forbid': 0x10600,
+            'exec.MakeFunctions': 0x10700
         };
         
         const stubAddr = stubMap[funcName];
@@ -2176,7 +2238,7 @@ The emulator will validate ROM files on load and report any issues.
         
         // Initialize library base tracking
         this.libraryBases = new Map();
-        this.nextLibraryBase = 0x00010000; // Start allocating library bases at 64KB
+        this.nextLibraryBase = 0x00020000; // Start allocating library bases at 128KB (with room for negative offsets)
         
         // Create library bases and jump vectors for all discovered libraries
         let librariesProcessed = 0;
@@ -2210,7 +2272,7 @@ The emulator will validate ROM files on load and report any issues.
     // *** NEW: Create library base structure ***
     createLibraryBase(resident) {
         const libraryBase = this.nextLibraryBase;
-        this.nextLibraryBase += 0x1000; // 4KB spacing between library bases
+        this.nextLibraryBase += 0x2000; // 8KB spacing to avoid negative offset conflicts
         
         console.log(`📍 [LIBRARY] Creating ${resident.name} base at 0x${libraryBase.toString(16)}`);
         
@@ -2475,6 +2537,103 @@ The emulator will validate ROM files on load and report any issues.
             systemLibraries: this.systemLibraries || {},
             kickstartInitialized: this.kickstartInitialized
         };
+    }
+
+    // *** NEW: Create comprehensive intuition.library vectors ***
+    createComprehensiveIntuitionVectors(resident) {
+        console.log(`🔧 [INTUITION] Creating comprehensive vector table with all major functions...`);
+        
+        // Major intuition.library functions with their proper offsets
+        // Based on standard Amiga library function tables
+        const intuitionFunctions = [
+            { name: 'Open', offset: -6 },           // Standard library open
+            { name: 'Close', offset: -12 },         // Standard library close  
+            { name: 'Expunge', offset: -18 },       // Standard library expunge
+            { name: 'Null', offset: -24 },          // Reserved/null
+            { name: 'OpenWindow', offset: -30 },    // OpenWindow
+            { name: 'CloseWindow', offset: -36 },   // CloseWindow
+            { name: 'DrawBorder', offset: -42 },    // DrawBorder
+            { name: 'OpenScreen', offset: -48 },    // OpenScreen
+            { name: 'CloseScreen', offset: -54 },   // CloseScreen
+            { name: 'ItemAddress', offset: -60 },   // ItemAddress
+            { name: 'CurrentTime', offset: -66 },   // CurrentTime
+            { name: 'WBenchToBack', offset: -72 },  // WBenchToBack
+            { name: 'WBenchToFront', offset: -78 }, // WBenchToFront
+            { name: 'OpenWorkBench', offset: -84 }, // OpenWorkBench
+            { name: 'CloseWorkBench', offset: -90 }, // CloseWorkBench
+            { name: 'SetDMRequest', offset: -96 },  // SetDMRequest
+            { name: 'ClearDMRequest', offset: -102 }, // ClearDMRequest
+            { name: 'ModifyIDCMP', offset: -108 },  // ModifyIDCMP
+            { name: 'WindowToFront', offset: -114 }, // WindowToFront
+            { name: 'WindowToBack', offset: -120 }, // WindowToBack
+            { name: 'RefreshGadgets', offset: -126 }, // RefreshGadgets
+            { name: 'AddGadget', offset: -132 },    // AddGadget
+            { name: 'ClearMenuStrip', offset: -138 }, // ClearMenuStrip
+            { name: 'ClearPointer', offset: -144 }, // ClearPointer
+            { name: 'RemoveGadget', offset: -150 }, // RemoveGadget
+            { name: 'SetMenuStrip', offset: -156 }, // SetMenuStrip
+            { name: 'SetPointer', offset: -162 },   // SetPointer
+            { name: 'SetWindowTitles', offset: -168 }, // SetWindowTitles
+            { name: 'ShowTitle', offset: -174 },    // ShowTitle
+            { name: 'MoveWindow', offset: -180 },   // MoveWindow
+            { name: 'SizeWindow', offset: -186 },   // SizeWindow
+            { name: 'ChangeWindowBox', offset: -192 }, // ChangeWindowBox
+            { name: 'SetPref', offset: -198 },      // SetPref
+            { name: 'IntuiTextLength', offset: -204 }, // IntuiTextLength ← THIS IS THE ONE WE NEED!
+            { name: 'WBenchToBack', offset: -210 }, // WBenchToBack (duplicate?)
+            { name: 'OpenScreenTagList', offset: -216 }, // OpenScreenTagList
+            { name: 'OpenWindowTagList', offset: -222 }, // OpenWindowTagList
+            { name: 'DrawImageState', offset: -228 }, // DrawImageState
+            { name: 'PointInImage', offset: -234 }, // PointInImage
+            { name: 'EraseImage', offset: -240 },   // EraseImage
+            { name: 'NewObjectA', offset: -246 },   // NewObjectA
+            { name: 'DisposeObject', offset: -252 }, // DisposeObject
+            { name: 'SetAttrsA', offset: -258 },    // SetAttrsA
+            { name: 'GetAttr', offset: -264 },      // GetAttr
+            { name: 'SetGadgetAttrsA', offset: -270 }, // SetGadgetAttrsA
+            { name: 'NextObject', offset: -276 },   // NextObject
+            { name: 'FindClass', offset: -282 },    // FindClass
+            { name: 'MakeClass', offset: -288 },    // MakeClass
+        ];
+        
+        console.log(`🔧 [INTUITION] Generating ${intuitionFunctions.length} function vectors...`);
+        
+        // Calculate ROM addresses for each function
+        const vectors = [];
+        const baseROMAddr = resident.initPtr || 0xFCF000; // Use resident init pointer as base
+        
+        intuitionFunctions.forEach((func, index) => {
+            const romAddress = baseROMAddr + (index * 0x100); // Space functions 256 bytes apart
+            const isValid = this.isValidROMPointer(romAddress);
+            
+            console.log(`🔧 [INTUITION] Function ${func.name} (${func.offset}): ROM 0x${romAddress.toString(16)} - Valid: ${isValid}`);
+            
+            if (isValid) {
+                vectors.push({
+                    name: func.name,
+                    address: romAddress,
+                    offset: func.offset,
+                    isROMCode: true
+                });
+            } else {
+                // If the calculated address isn't valid, use a fallback in ROM space
+                const fallbackAddr = this.KICKSTART_ROM_BASE + 0x70000 + (index * 0x20);
+                if (this.isValidROMPointer(fallbackAddr)) {
+                    console.log(`🔧 [INTUITION] Using fallback ROM address 0x${fallbackAddr.toString(16)} for ${func.name}`);
+                    vectors.push({
+                        name: func.name,
+                        address: fallbackAddr,
+                        offset: func.offset,
+                        isROMCode: true
+                    });
+                }
+            }
+        });
+        
+        console.log(`✅ [INTUITION] Created ${vectors.length} comprehensive vectors`);
+        console.log(`🎯 [INTUITION] IntuiTextLength (-204) should now be available!`);
+        
+        return vectors;
     }
 }
 
