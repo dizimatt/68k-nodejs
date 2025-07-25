@@ -40,6 +40,9 @@ class MemoryManager {
         // Stub management (for later ROM integration)
         this.nextStubAddress = 0x01010000;             // Our implementation area
         this.libraryStubs = new Map();                 // Track created stubs
+        this.libraries = new Map();                    // Track initialized libraries
+        this.romDrivenMode = false;                    // Authentic ROM execution mode
+        this.romResetVectors = null;                   // ROM reset vectors
         
         console.log('🏗️ [MEMORY] MemoryManager initialized - ready for Kickstart ROM loading');
         
@@ -705,6 +708,14 @@ The emulator will validate ROM files on load and report any issues.
         if (resetPC < 0x00F80000 || resetPC > 0x00FFFFFF) {
             console.warn(`⚠️ [ROM] Reset PC outside ROM space: 0x${resetPC.toString(16)}`);
         }
+
+        // Store reset vectors for authentic ROM startup
+        this.romResetVectors = {
+            stackPointer: resetSSP,
+            programCounter: resetPC
+        };
+        
+        console.log(`✅ [ROM] Reset vectors stored for authentic startup`);
         
         // Look for ROM tag patterns (resident modules start with 0x4AFC)
         let residentCount = 0;
@@ -725,6 +736,28 @@ The emulator will validate ROM files on load and report any issues.
         }
         
         console.log('✅ [ROM] ROM structure validation passed');
+    }
+
+    // *** NEW: Get ROM reset vectors for authentic CPU initialization ***
+    getROMResetVectors() {
+        if (!this.romResetVectors) {
+            throw new Error('ROM not loaded - no reset vectors available');
+        }
+        return this.romResetVectors;
+    }
+
+    // *** NEW: Enable authentic ROM-driven initialization mode ***
+    enableROMDrivenMode() {
+        console.log('🚀 [ROM] Enabling authentic ROM-driven initialization mode');
+        console.log('🔧 [ROM] Disabling JavaScript stub creation...');
+        
+        this.romDrivenMode = true;
+        
+        // Clear any existing stub mappings
+        this.libraryStubs.clear();
+        
+        console.log('✅ [ROM] ROM-driven mode enabled - CPU will execute real ROM code');
+        return this.getROMResetVectors();
     }
     
     // *** ENHANCED: Load Kickstart ROM with full info tracking ***
@@ -754,6 +787,12 @@ The emulator will validate ROM files on load and report any issues.
         
         this.kickstartInitialized = true;
         console.log(`✅ [KICKSTART] ${romInfo.name} loaded and initialized successfully`);
+        
+        // *** NEW: Automatically enable ROM-driven mode after successful ROM load ***
+        console.log('🚀 [KICKSTART] Auto-enabling ROM-driven mode...');
+        this.romDrivenMode = true;
+        this.libraryStubs.clear();
+        console.log('✅ [KICKSTART] ROM-driven mode automatically enabled - ready for authentic execution');
         
         return this.currentRomInfo;
     }
@@ -2050,7 +2089,13 @@ The emulator will validate ROM files on load and report any issues.
 
     // *** NEW: Initialize library jump vectors from discovered ROM addresses ***
     initializeLibraryJumpVectors() {
-        console.log('🔧 [VECTORS] Initializing library jump vectors...');
+        if (this.romDrivenMode) {
+            console.log('🚀 [VECTORS] ROM-driven mode enabled - skipping JavaScript stub creation');
+            console.log('🔧 [VECTORS] ROM code will handle its own initialization');
+            return;
+        }
+        
+        console.log('🔧 [VECTORS] Initializing library jump vectors (legacy stub mode)...');
         
         if (!this.execBaseAddr) {
             console.warn('⚠️ [VECTORS] ExecBase not initialized - cannot create jump vectors');
@@ -2063,7 +2108,7 @@ The emulator will validate ROM files on load and report any issues.
         // Initialize other system library vectors
         this.initializeSystemLibraryVectors();
         
-        console.log('✅ [VECTORS] Library jump vectors initialized');
+        console.log('✅ [VECTORS] Library jump vectors initialized (legacy stub mode)');
     }
 
     // *** NEW: Initialize exec.library jump vectors ***

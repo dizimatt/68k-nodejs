@@ -127,6 +127,34 @@ app.get('/step', (req, res) => {
     }
 });
 
+// *** NEW: Get current CPU state ***
+app.get('/cpu/state', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.cpu) {
+            return res.status(400).json({ error: 'CPU not initialized' });
+        }
+
+        const stats = interpreter.cpu.getStatistics();
+        const registers = interpreter.cpu.getRegisters();
+
+        res.json({
+            success: true,
+            totalInstructions: stats.totalInstructions || 0,
+            totalCycles: stats.totalCycles || 0,
+            implementedOpcodes: stats.implementedOpcodes || 0,
+            implementedPercent: stats.implementedPercent || "0.00",
+            cpuType: stats.cpuType || "Unknown",
+            registers: registers,
+            running: interpreter.cpu.isRunning(),
+            initialized: interpreter.cpu.isInitialized()
+        });
+
+    } catch (error) {
+        console.error('CPU state error:', error);
+        res.status(500).json({ error: 'Failed to get CPU state: ' + error.message });
+    }
+});
+
 app.get('/reset', (req, res) => {
     try {
         if (interpreter) {
@@ -312,15 +340,24 @@ app.post('/roms/load/:romId', (req, res) => {
         }
 
         const romId = req.params.romId;
-        console.log(`🚀 [SERVER] Loading ROM: ${romId}`);
+        console.log(`🚀 [SERVER] Loading ROM with auto-initialization: ${romId}`);
 
-        const result = interpreter.memory.loadROMById(romId);
+        // Load ROM (this now auto-enables ROM-driven mode)
+        const romResult = interpreter.memory.loadROMById(romId);
+        
+        // Automatically initialize CPU from ROM reset vectors
+        const resetVectors = interpreter.initializeFromROM();
 
         res.json({
             success: true,
-            message: result.message,
-            romId: result.romId,
-            romInfo: result.romInfo
+            message: `${romResult.message} and CPU auto-initialized`,
+            romId: romId,
+            romInfo: romResult.romInfo,
+            resetVectors: {
+                programCounter: `0x${resetVectors.programCounter.toString(16)}`,
+                stackPointer: `0x${resetVectors.stackPointer.toString(16)}`
+            },
+            autoInitialized: true
         });
 
     } catch (error) {
@@ -336,15 +373,24 @@ app.post('/roms/load-default', (req, res) => {
             return res.status(500).json({ error: 'Memory manager not initialized' });
         }
 
-        console.log('🚀 [SERVER] Loading default ROM...');
+        console.log('🚀 [SERVER] Loading default ROM with auto-initialization...');
 
-        const result = interpreter.memory.loadDefaultROM();
+        // Load ROM (this now auto-enables ROM-driven mode)
+        const romResult = interpreter.memory.loadDefaultROM();
+        
+        // Automatically initialize CPU from ROM reset vectors
+        const resetVectors = interpreter.initializeFromROM();
 
         res.json({
             success: true,
-            message: result.message,
-            romId: result.romId,
-            romInfo: result.romInfo
+            message: `${romResult.message} and CPU auto-initialized`,
+            romId: romResult.romId,
+            romInfo: romResult.romInfo,
+            resetVectors: {
+                programCounter: `0x${resetVectors.programCounter.toString(16)}`,
+                stackPointer: `0x${resetVectors.stackPointer.toString(16)}`
+            },
+            autoInitialized: true
         });
 
     } catch (error) {
@@ -370,6 +416,54 @@ app.get('/roms/status', (req, res) => {
     } catch (error) {
         console.error('ROM status error:', error);
         res.status(500).json({ error: 'Failed to get ROM status: ' + error.message });
+    }
+});
+
+// *** NEW: Enable authentic ROM-driven initialization mode ***
+app.post('/roms/enable-rom-driven-mode', (req, res) => {
+    try {
+        if (!interpreter || !interpreter.memory) {
+            return res.status(500).json({ error: 'Interpreter not initialized' });
+        }
+
+        const resetVectors = interpreter.enableROMDrivenMode();
+
+        res.json({
+            success: true,
+            message: 'ROM-driven mode enabled successfully',
+            resetVectors: {
+                programCounter: `0x${resetVectors.programCounter.toString(16)}`,
+                stackPointer: `0x${resetVectors.stackPointer.toString(16)}`
+            }
+        });
+
+    } catch (error) {
+        console.error('ROM-driven mode error:', error);
+        res.status(500).json({ error: 'Failed to enable ROM-driven mode: ' + error.message });
+    }
+});
+
+// *** NEW: Initialize CPU from ROM reset vectors ***
+app.post('/cpu/initialize-from-rom', (req, res) => {
+    try {
+        if (!interpreter) {
+            return res.status(500).json({ error: 'Interpreter not initialized' });
+        }
+
+        const resetVectors = interpreter.initializeFromROM();
+
+        res.json({
+            success: true,
+            message: 'CPU initialized from ROM reset vectors',
+            resetVectors: {
+                programCounter: `0x${resetVectors.programCounter.toString(16)}`,
+                stackPointer: `0x${resetVectors.stackPointer.toString(16)}`
+            }
+        });
+
+    } catch (error) {
+        console.error('ROM CPU initialization error:', error);
+        res.status(500).json({ error: 'Failed to initialize CPU from ROM: ' + error.message });
     }
 });
 

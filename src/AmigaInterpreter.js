@@ -235,6 +235,73 @@ class AmigaInterpreter {
         };
     }
 
+    // *** NEW: Enable authentic ROM-driven initialization mode ***
+    enableROMDrivenMode() {
+        console.log('🚀 [INTERPRETER] Enabling authentic ROM-driven emulation mode');
+        
+        try {
+            const resetVectors = this.memory.enableROMDrivenMode();
+            console.log(`✅ [INTERPRETER] ROM-driven mode enabled`);
+            console.log(`📍 [INTERPRETER] ROM Reset PC: 0x${resetVectors.programCounter.toString(16)}`);
+            console.log(`📍 [INTERPRETER] ROM Reset SP: 0x${resetVectors.stackPointer.toString(16)}`);
+            
+            return resetVectors;
+        } catch (error) {
+            console.error(`❌ [INTERPRETER] Failed to enable ROM-driven mode: ${error.message}`);
+            throw error;
+        }
+    }
+
+    // *** NEW: Initialize CPU from ROM reset vectors ***
+    initializeFromROM() {
+        console.log('🚀 [INTERPRETER] Initializing CPU from ROM reset vectors...');
+        
+        try {
+            const resetVectors = this.memory.getROMResetVectors();
+            
+            // Initialize CPU with ROM-provided values
+            this.cpu = new MusashiInspiredCPU(this.memory);
+            this.cpu.initializeFromROM(resetVectors);
+            
+            console.log('✅ [INTERPRETER] CPU initialized from ROM reset vectors');
+            console.log(`📍 [INTERPRETER] Starting execution at ROM PC: 0x${resetVectors.programCounter.toString(16)}`);
+            console.log(`🎯 [INTERPRETER] Ready to step through ROM startup code`);
+            
+            this.loaded = true;
+            return resetVectors;
+            
+        } catch (error) {
+            console.error(`❌ [INTERPRETER] ROM initialization failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    // *** NEW: Load ROM and automatically initialize for authentic execution ***
+    loadROM(romBuffer, romId, romInfo) {
+        console.log('🔥 [INTERPRETER] Loading ROM and enabling authentic mode...');
+        
+        try {
+            // Load ROM into memory (this auto-enables ROM-driven mode)
+            const loadResult = this.memory.loadKickstartROM(romBuffer, romId, romInfo);
+            
+            // Automatically initialize CPU from ROM reset vectors
+            const resetVectors = this.initializeFromROM();
+            
+            console.log('🚀 [INTERPRETER] ROM loaded and CPU initialized - ready for ROM execution');
+            
+            return {
+                success: true,
+                romInfo: loadResult,
+                resetVectors: resetVectors,
+                message: 'ROM loaded and CPU automatically initialized from reset vectors'
+            };
+            
+        } catch (error) {
+            console.error(`❌ [INTERPRETER] ROM loading failed: ${error.message}`);
+            throw error;
+        }
+    }
+
     // FIXED: Reset - keep executable loaded!
     reset() {
         console.log('🔄 [INTERPRETER] Resetting system state (keeping executable loaded)...');

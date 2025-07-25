@@ -14,6 +14,30 @@ const CPUInterface = {
         
         console.log(`✅ [CPU] Pure JS CPU initialized at PC=0x${programEntry.toString(16)}`);
     },
+
+    // *** NEW: Initialize CPU from ROM reset vectors for authentic emulation ***
+    initializeFromROM(resetVectors) {
+        console.log('🚀 [CPU] Initializing from ROM reset vectors (authentic mode)...');
+        
+        // Set registers from ROM reset vectors
+        this.registers.pc = resetVectors.programCounter >>> 0;
+        this.registers.a[7] = resetVectors.stackPointer >>> 0;  // ROM-provided stack
+        this.registers.sr = 0x2700;  // Supervisor mode (required for ROM startup)
+        
+        // Update CPU flags from status register
+        this.updateFlagsFromSR();
+        
+        // Reset statistics
+        this.cycles = 0;
+        this.instructionCount = 0;
+        this.running = true;
+        this.initialized = true;
+        
+        console.log(`✅ [CPU] ROM initialization complete`);
+        console.log(`📍 [CPU] PC: 0x${this.registers.pc.toString(16)}`);
+        console.log(`📍 [CPU] SP: 0x${this.registers.a[7].toString(16)}`);
+        console.log(`🚀 [CPU] Ready to execute authentic Amiga ROM startup code`);
+    },
     
     getStatistics() {
         return {

@@ -441,7 +441,37 @@ npm run start:wasm
 
 **Current State**: Jump vector bug FIXED - complete execution flow operational. JSR (-552,A6) → JMP 0x00020000 → Enhanced OpenLibrary stub now working correctly.
 
-**🎯 NEXT CRITICAL TASK**: Implement CMP.B instruction (0x0C51) in CPU emulator to enable library name parsing in OpenLibrary stub.
+**✅ COMPLETED: ROM-Driven Mode Implementation**
+
+### 🚀 **Phase 5 - ROM-Driven Initialization** ✅ **COMPLETED**
+**Status: FULLY OPERATIONAL - AUTOMATIC ROM EXECUTION**
+
+**Major Achievement**: Eliminated JavaScript stubbing in favor of authentic ROM execution.
+
+**✅ Implemented Features:**
+- **Automatic ROM-driven mode** on ROM load
+- **CPU auto-initialization** from ROM reset vectors  
+- **Seamless frontend integration** for ROM code stepping
+- **Authentic Amiga startup sequence** execution
+
+**API Usage (Simplified):**
+```bash
+# Single command does everything:
+curl -X POST http://localhost:3000/roms/load-default
+
+# Result: ROM loaded, mode enabled, CPU initialized
+# Frontend can immediately step through ROM code:
+curl http://localhost:3000/step  # → LEA $400,A7 (ROM startup)
+```
+
+**Execution Flow (New):**
+```
+1. Load ROM → Auto-enable ROM-driven mode
+2. CPU automatically initialized with ROM reset vectors
+3. PC set to 0xf800d2 (authentic Kickstart entry point)
+4. User steps through real Amiga ROM startup code
+5. ROM handles its own library initialization
+```
 
 ## 🔧 Debug Tools Available
 
