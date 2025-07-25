@@ -1376,6 +1376,16 @@
                     if (result.success) {
                         this.log(`✅ ${result.message}`, 'success');
                         
+                        // Check if ROM was auto-initialized (new feature)
+                        if (result.autoInitialized) {
+                            this.log(`🚀 CPU auto-initialized from ROM reset vectors`, 'success');
+                            this.log(`📍 PC: ${result.resetVectors.programCounter}, SP: ${result.resetVectors.stackPointer}`, 'info');
+                            
+                            // Enable execution controls since CPU is ready
+                            this.enableControls();
+                            this.showStatus('ROM loaded and CPU initialized - Ready to step through ROM code!', 'success');
+                        }
+                        
                         // Refresh ROM status
                         await this.refreshROMs();
                         
@@ -1399,6 +1409,16 @@
                     
                     if (result.success) {
                         this.log(`✅ ${result.message}`, 'success');
+                        
+                        // Check if ROM was auto-initialized (new feature)
+                        if (result.autoInitialized) {
+                            this.log(`🚀 CPU auto-initialized from ROM reset vectors`, 'success');
+                            this.log(`📍 PC: ${result.resetVectors.programCounter}, SP: ${result.resetVectors.stackPointer}`, 'info');
+                            
+                            // Enable execution controls since CPU is ready
+                            this.enableControls();
+                            this.showStatus('ROM loaded and CPU initialized - Ready to step through ROM code!', 'success');
+                        }
                         
                         // Refresh ROM status
                         await this.refreshROMs();
