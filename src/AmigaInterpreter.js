@@ -6,6 +6,7 @@ const { MusashiInspiredCPU } = require('./MusashiInspiredCPU');
 const { BlitterChip } = require('./BlitterChip');
 const { CopperChip } = require('./CopperChip');
 const { VirtualCanvas } = require('./VirtualCanvas');
+const KickstartDisassembler = require('./KickstartDisassembler');
 
 class AmigaInterpreter {
     constructor() {
@@ -20,6 +21,12 @@ class AmigaInterpreter {
         this.loaded = false;
         this.running = false;
         this.loadedHunks = [];  // Store hunks separately so reset doesn't lose them
+        
+        // Add disassembler - now uses CPU for opcode parsing
+        this.kickstartDisassembler = null;
+        this.kickstartInitialized = false;
+        this.validationMode = false;
+        this.disassemblyAvailable = false;
     }
 
     loadExecutable(buffer) {
@@ -334,6 +341,222 @@ class AmigaInterpreter {
         
         console.log('✅ [INTERPRETER] Reset complete - executable still loaded and ready to run');
         console.log(`📊 [INTERPRETER] Status: loaded=${this.loaded}, hunks=${this.loadedHunks.length}`);
+    }
+
+    /**
+     * Initialize kickstart disassembly after ROM loading
+     * Now leverages existing CPU opcode parsing instead of duplicating logic
+     */
+    async initializeKickstartDisassembly() {
+        console.log('🔍 [INTERPRETER] Initializing kickstart disassembly using CPU opcode parsing...');
+        
+        if (!this.memory.romResetVectors) {
+            throw new Error('ROM not loaded - cannot disassemble kickstart');
+        }
+
+        // Create disassembler that uses our existing CPU for opcode parsing
+        this.kickstartDisassembler = new KickstartDisassembler(this.memory, this.cpu);
+        
+        try {
+            const disassemblyResult = await this.kickstartDisassembler.disassembleKickstartInit();
+            
+            console.log(`✅ [INTERPRETER] Kickstart disassembly complete: ${disassemblyResult.totalInstructions} instructions`);
+            console.log(`🔑 [INTERPRETER] Sequence checksum: 0x${disassemblyResult.checksum.toString(16)}`);
+            console.log(`🧠 [INTERPRETER] Used existing CPU opcode parsing - no code duplication!`);
+            
+            this.disassemblyAvailable = true;
+            this.kickstartInitialized = true;
+            
+            return {
+                success: true,
+                disassembly: disassemblyResult,
+                frontendData: this.kickstartDisassembler.getDisassemblyForFrontend()
+            };
+            
+        } catch (error) {
+            console.error('❌ [INTERPRETER] Kickstart disassembly failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Enable validation mode for step-through execution
+     */
+    enableValidationMode() {
+        if (!this.disassemblyAvailable) {
+            throw new Error('Disassembly not available - run initializeKickstartDisassembly() first');
+        }
+        
+        this.validationMode = true;
+        this.kickstartDisassembler.resetValidation();
+        
+        console.log('🔒 [INTERPRETER] Validation mode enabled - execution will be checked against disassembly');
+        
+        return {
+            success: true,
+            message: 'Validation mode enabled',
+            totalInstructions: this.kickstartDisassembler.initializationSequence.length
+        };
+    }
+
+    /**
+     * Disable validation mode
+     */
+    disableValidationMode() {
+        this.validationMode = false;
+        console.log('🔓 [INTERPRETER] Validation mode disabled');
+        
+        return {
+            success: true,
+            message: 'Validation mode disabled'
+        };
+    }
+
+    /**
+     * Enhanced step function with validation
+     * Now passes CPU execution results to validator for better checking
+     */
+    async stepWithValidation() {
+        if (!this.validationMode) {
+            // Fall back to normal step
+            return this.step();
+        }
+
+        try {
+            // Get current state before execution
+            const beforePC = this.cpu.registers.pc;
+            const beforeOpcode = this.memory.readWord(beforePC);
+            
+            // Execute the step and capture detailed CPU results
+            const stepResult = this.step();
+            
+            if (!stepResult.success) {
+                return stepResult;
+            }
+
+            // Validate against disassembly checklist - now with CPU results
+            const validation = this.kickstartDisassembler.validateExecutionStep(
+                beforePC, 
+                beforeOpcode, 
+                stepResult.cpu  // Pass CPU execution results for enhanced validation
+            );
+            
+            if (!validation.valid) {
+                // Validation failed - flag error and stop execution
+                console.error('🚨 [VALIDATION] Execution validation failed!');
+                console.error(`❌ [VALIDATION] ${validation.error}`);
+                
+                this.cpu.running = false;
+                
+                return {
+                    success: false,
+                    error: validation.error,
+                    validation: {
+                        failed: true,
+                        reason: validation.error,
+                        expected: validation.expected,
+                        actual: { pc: beforePC, opcode: beforeOpcode }
+                    },
+                    cpu: this.cpu.getState(),
+                    disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+                };
+            }
+
+            // Validation passed
+            console.log(`✅ [VALIDATION] Step validated: ${validation.instruction.fullInstruction} (${validation.instruction.cycles}c)`);
+            
+            return {
+                success: true,
+                cpu: stepResult.cpu,
+                memory: stepResult.memory,
+                display: stepResult.display,
+                validation: {
+                    passed: true,
+                    instruction: validation.instruction,
+                    progress: validation.progress
+                },
+                disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+            };
+
+        } catch (error) {
+            console.error('❌ [VALIDATION] Step validation error:', error);
+            return {
+                success: false,
+                error: error.message,
+                validation: { error: true }
+            };
+        }
+    }
+
+    /**
+     * Run with validation until completion or error
+     */
+    async runWithValidation() {
+        if (!this.validationMode) {
+            return this.run();
+        }
+
+        console.log('🏃 [VALIDATION] Starting validated execution run...');
+        
+        let stepCount = 0;
+        const maxSteps = 10000; // Safety limit
+        
+        while (this.cpu.running && stepCount < maxSteps) {
+            const stepResult = await this.stepWithValidation();
+            
+            if (!stepResult.success) {
+                console.log(`🛑 [VALIDATION] Run stopped at step ${stepCount}: ${stepResult.error}`);
+                return stepResult;
+            }
+            
+            stepCount++;
+            
+            // Check if we've completed the initialization sequence
+            const status = this.kickstartDisassembler.getValidationStatus();
+            if (status.isComplete) {
+                console.log('🎉 [VALIDATION] Kickstart initialization sequence completed successfully!');
+                break;
+            }
+        }
+        
+        return {
+            success: true,
+            message: `Validated execution completed: ${stepCount} steps`,
+            totalSteps: stepCount,
+            validation: this.kickstartDisassembler.getValidationStatus(),
+            cpu: this.cpu.getState(),
+            disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+        };
+    }
+
+    /**
+     * Get current kickstart disassembly status
+     */
+    getKickstartStatus() {
+        return {
+            initialized: this.kickstartInitialized,
+            disassemblyAvailable: this.disassemblyAvailable,
+            validationMode: this.validationMode,
+            validation: this.kickstartDisassembler ? this.kickstartDisassembler.getValidationStatus() : null,
+            disassembly: this.kickstartDisassembler ? this.kickstartDisassembler.getDisassemblyForFrontend() : null
+        };
+    }
+
+    /**
+     * Reset kickstart validation state
+     */
+    resetKickstartValidation() {
+        if (this.kickstartDisassembler) {
+            this.kickstartDisassembler.resetValidation();
+        }
+        
+        return {
+            success: true,
+            message: 'Kickstart validation reset'
+        };
     }
 }
 

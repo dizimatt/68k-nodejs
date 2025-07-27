@@ -1,0 +1,1675 @@
+Overview
+This implementation adds automatic kickstart initialization routine disassembly and step-through validation to your Amiga emulator. The system will:
+
+Disassemble the complete kickstart initialization sequence from ROM reset vectors
+Display the ASM code in both debug console and frontend
+Validate each execution step against the disassembly checklist
+Automatically detect errors when opcodes don't match expected sequence
+
+Implementation Steps
+1. Add the Core Components
+File: src/KickstartDisassembler.js
+  Copy the KickstartDisassembler class from the artifact contents below:
+  This handles 68k instruction decoding and sequence validation
+
+File: src/AmigaInterpreter.js (Enhanced)
+  Add the enhanced methods from the artifact below Integrates disassembler with existing CPU execution
+
+File: server.js (Additional endpoints)
+  Add the new server endpoints from the artifact below Provides API for kickstart analysis functionality
+
+File: public/index.html (Frontend integration)
+  Add the HTML/CSS/JavaScript from the artifact below Provides user interface for kickstart analysis
+
+2. Integration with Existing Code
+Add to your existing AmigaInterpreter.js constructor:
+javascriptconst KickstartDisassembler = require('./KickstartDisassembler');
+
+// In constructor:
+this.kickstartDisassembler = null;
+this.kickstartInitialized = false;
+this.validationMode = false;
+this.disassemblyAvailable = false;
+Add to your existing server.js:
+javascript// Add all the new endpoints from the kickstart_server_endpoints artifact
+
+3. Usage Workflow
+Option A: Complete Automatic Setup
+bash# Single API call does everything:
+curl -X POST http://localhost:3000/kickstart/initialize-complete
+
+# Result: ROM loaded + CPU initialized + Disassembled + Validation enabled
+Option B: Step-by-Step Setup
+bash# 1. Load ROM (if not already loaded)
+curl -X POST http://localhost:3000/roms/load-default
+
+# 2. Disassemble kickstart initialization
+curl -X POST http://localhost:3000/kickstart/disassemble
+
+# 3. Enable validation mode
+curl -X POST http://localhost:3000/kickstart/validation/enable
+
+# 4. Now step through with validation
+curl -X POST http://localhost:3000/step-validated
+
+4. I'll step through the frontend
+
+Artifacts:
+
+KickstartDisassembler Class from /src/KickstartDisassembler.js  (NEW FILE):
+// src/KickstartDisassembler.js - Leverages Existing CPU Opcode Parsing
+
+class KickstartDisassembler {
+    constructor(memoryManager, cpu) {
+        this.memory = memoryManager;
+        this.cpu = cpu;  // Leverage existing CPU for opcode parsing
+        this.disassemblyCache = new Map();
+        this.initializationSequence = [];
+        this.currentInstructionIndex = 0;
+        this.errors = [];
+    }
+
+    /**
+     * Disassemble kickstart initialization routine using existing CPU logic
+     */
+    async disassembleKickstartInit() {
+        console.log('🔍 [DISASM] Starting kickstart initialization disassembly...');
+        
+        // Get ROM reset vectors
+        const resetVectors = this.memory.romResetVectors;
+        if (!resetVectors) {
+            throw new Error('ROM reset vectors not available - load ROM first');
+        }
+
+        const startPC = parseInt(resetVectors.programCounter, 16);
+        
+        console.log(`🎯 [DISASM] Disassembling from PC: 0x${startPC.toString(16)}`);
+        
+        // Save current CPU state
+        const savedState = this.saveCPUState();
+        
+        try {
+            // Set up CPU for disassembly (don't actually execute)
+            this.setupCPUForDisassembly(startPC);
+            
+            // Disassemble until we hit termination conditions
+            let currentPC = startPC;
+            let instructionCount = 0;
+            const maxInstructions = 1000; // Safety limit
+            
+            while (instructionCount < maxInstructions) {
+                const instruction = this.disassembleInstructionAtPC(currentPC);
+                
+                if (!instruction) {
+                    console.log('⚠️ [DISASM] Failed to disassemble instruction, stopping');
+                    break;
+                }
+                
+                this.initializationSequence.push({
+                    address: currentPC,
+                    opcode: instruction.opcode,
+                    bytes: instruction.bytes,
+                    mnemonic: instruction.asm || instruction.instruction,
+                    operands: instruction.operands || '',
+                    fullInstruction: instruction.asm || instruction.instruction,
+                    size: instruction.size,
+                    description: instruction.description || 'No description',
+                    index: instructionCount,
+                    cycles: instruction.cycles || 4
+                });
+                
+                // Check for end conditions
+                if (this.isEndOfInitialization(instruction, currentPC)) {
+                    console.log(`🏁 [DISASM] End of initialization detected at PC: 0x${currentPC.toString(16)}`);
+                    break;
+                }
+                
+                currentPC += instruction.size;
+                instructionCount++;
+            }
+            
+        } finally {
+            // Restore CPU state
+            this.restoreCPUState(savedState);
+        }
+        
+        console.log(`✅ [DISASM] Disassembled ${this.initializationSequence.length} instructions`);
+        this.logDisassemblyToConsole();
+        
+        return {
+            sequence: this.initializationSequence,
+            startAddress: startPC,
+            totalInstructions: this.initializationSequence.length,
+            checksum: this.calculateSequenceChecksum()
+        };
+    }
+
+    /**
+     * Leverage CPU's existing instruction decoding without execution
+     */
+    disassembleInstructionAtPC(address) {
+        try {
+            const opcode = this.memory.readWord(address);
+            
+            // Use CPU's existing peekNextInstruction or decodeInstructionName
+            const cpuDecoded = this.cpu.peekNextInstruction ? 
+                this.cpu.peekNextInstruction() : 
+                this.cpu.decodeInstructionName(opcode);
+            
+            // Calculate instruction size by analyzing opcode patterns
+            const size = this.calculateInstructionSize(opcode, address);
+            
+            // Get raw bytes for the instruction
+            const bytes = this.getInstructionBytes(address, size);
+            
+            // Enhance with additional analysis
+            const enhanced = this.enhanceInstructionInfo(opcode, address, cpuDecoded);
+            
+            return {
+                opcode: opcode,
+                bytes: bytes,
+                instruction: enhanced.instruction,
+                asm: enhanced.asm,
+                description: enhanced.description,
+                size: size,
+                cycles: enhanced.cycles || 4,
+                operands: enhanced.operands || ''
+            };
+            
+        } catch (error) {
+            console.error(`❌ [DISASM] Error disassembling at 0x${address.toString(16)}: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Calculate instruction size by analyzing opcode patterns
+     * This leverages 68k architecture knowledge without duplicating CPU logic
+     */
+    calculateInstructionSize(opcode, address) {
+        // Check if CPU has a handler for this opcode
+        const handler = this.cpu.opcodeTable.get(opcode);
+        
+        if (!handler) {
+            return 2; // Unknown opcodes are 1 word
+        }
+        
+        // Use CPU's built-in size calculation if available
+        if (this.cpu.getInstructionSize) {
+            return this.cpu.getInstructionSize(opcode);
+        }
+        
+        // Fallback: analyze common patterns
+        return this.analyzeInstructionSize(opcode, address);
+    }
+
+    /**
+     * Analyze instruction size based on 68k addressing modes
+     */
+    analyzeInstructionSize(opcode, address) {
+        const high4 = (opcode >> 12) & 0xF;
+        
+        // MOVE instructions - variable size based on addressing modes
+        if (high4 >= 1 && high4 <= 3) {
+            let size = 2; // Base instruction
+            
+            // Check source addressing mode
+            const srcMode = (opcode >> 3) & 0x7;
+            const srcReg = opcode & 0x7;
+            size += this.getAddressingModeSize(srcMode, srcReg);
+            
+            // Check destination addressing mode  
+            const dstMode = (opcode >> 6) & 0x7;
+            const dstReg = (opcode >> 9) & 0x7;
+            size += this.getAddressingModeSize(dstMode, dstReg);
+            
+            return size;
+        }
+        
+        // LEA instructions
+        if ((opcode & 0xF1C0) === 0x41C0) {
+            const mode = (opcode >> 3) & 0x7;
+            const reg = opcode & 0x7;
+            return 2 + this.getAddressingModeSize(mode, reg);
+        }
+        
+        // JSR instructions
+        if ((opcode & 0xFFC0) === 0x4E80) {
+            const mode = (opcode >> 3) & 0x7;
+            const reg = opcode & 0x7;
+            return 2 + this.getAddressingModeSize(mode, reg);
+        }
+        
+        // JMP instructions
+        if ((opcode & 0xFFC0) === 0x4EC0) {
+            const mode = (opcode >> 3) & 0x7;
+            const reg = opcode & 0x7;
+            return 2 + this.getAddressingModeSize(mode, reg);
+        }
+        
+        // Immediate data instructions
+        if ((opcode & 0xFF00) === 0x0C00) { // CMPI
+            const size = ((opcode >> 6) & 3);
+            return size === 0 ? 4 : (size === 1 ? 4 : 6); // byte/word = 4, long = 6
+        }
+        
+        // Branch instructions with displacement
+        if ((opcode & 0xF000) === 0x6000) {
+            const displacement = opcode & 0xFF;
+            return displacement === 0 ? 4 : 2; // 0 = word displacement, else byte
+        }
+        
+        // Default: most instructions are 2 bytes
+        return 2;
+    }
+
+    /**
+     * Get additional bytes required for addressing mode
+     */
+    getAddressingModeSize(mode, reg) {
+        switch (mode) {
+            case 0: // Dn
+            case 1: // An  
+            case 2: // (An)
+            case 3: // (An)+
+            case 4: // -(An)
+                return 0;
+            
+            case 5: // d16(An)
+                return 2;
+            
+            case 6: // d8(An,Xn)
+                return 2;
+            
+            case 7: // Special modes
+                switch (reg) {
+                    case 0: return 2; // abs.W
+                    case 1: return 4; // abs.L
+                    case 2: return 2; // d16(PC)
+                    case 3: return 2; // d8(PC,Xn)
+                    case 4: return 2; // #immediate (word)
+                    default: return 0;
+                }
+            
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Enhance instruction info using CPU knowledge
+     */
+    enhanceInstructionInfo(opcode, address, cpuDecoded) {
+        // Start with CPU's decoded information
+        let enhanced = {
+            instruction: cpuDecoded.name || cpuDecoded.instruction || `UNK_${opcode.toString(16)}`,
+            asm: cpuDecoded.asm || cpuDecoded.name || cpuDecoded.instruction || `DC.W $${opcode.toString(16)}`,
+            description: cpuDecoded.description || 'Unknown instruction',
+            cycles: 4
+        };
+        
+        // Add kickstart-specific context
+        enhanced.description = this.addKickstartContext(opcode, address, enhanced.description);
+        
+        // Estimate cycles based on instruction type
+        enhanced.cycles = this.estimateInstructionCycles(opcode);
+        
+        return enhanced;
+    }
+
+    /**
+     * Add kickstart-specific context to descriptions
+     */
+    addKickstartContext(opcode, address, baseDescription) {
+        // Identify common kickstart patterns
+        if ((opcode & 0xFFC0) === 0x4E80) { // JSR
+            return baseDescription + ' (Potential library call or subroutine)';
+        }
+        
+        if ((opcode & 0xF1C0) === 0x41C0) { // LEA
+            return baseDescription + ' (Load system address or pointer)';
+        }
+        
+        if ((opcode & 0xF000) === 0x2000 || (opcode & 0xF000) === 0x3000) { // MOVE.L/MOVE.W
+            return baseDescription + ' (System data movement)';
+        }
+        
+        if (opcode === 0x4E75) { // RTS
+            return baseDescription + ' (Return from system routine)';
+        }
+        
+        return baseDescription;
+    }
+
+    /**
+     * Estimate instruction cycles based on opcode patterns
+     */
+    estimateInstructionCycles(opcode) {
+        const high4 = (opcode >> 12) & 0xF;
+        
+        // MOVE instructions
+        if (high4 >= 1 && high4 <= 3) {
+            return 8; // Typical MOVE cycles
+        }
+        
+        // Branch/Jump instructions
+        if ((opcode & 0xF000) === 0x6000 || (opcode & 0xFFC0) === 0x4EC0) {
+            return 10; // Branch/jump overhead
+        }
+        
+        // JSR
+        if ((opcode & 0xFFC0) === 0x4E80) {
+            return 18; // JSR with stack operations
+        }
+        
+        // RTS
+        if (opcode === 0x4E75) {
+            return 16; // RTS with stack operations
+        }
+        
+        // LEA
+        if ((opcode & 0xF1C0) === 0x41C0) {
+            return 8; // LEA address calculation
+        }
+        
+        return 4; // Default cycles
+    }
+
+    /**
+     * Save current CPU state for restoration after disassembly
+     */
+    saveCPUState() {
+        return {
+            pc: this.cpu.registers.pc,
+            running: this.cpu.running,
+            // Save any other relevant state
+        };
+    }
+
+    /**
+     * Setup CPU for disassembly mode
+     */
+    setupCPUForDisassembly(startPC) {
+        // Don't change CPU state - we're just reading memory and using CPU logic
+        // This is safe because we're not executing instructions
+    }
+
+    /**
+     * Restore CPU state after disassembly
+     */
+    restoreCPUState(savedState) {
+        this.cpu.registers.pc = savedState.pc;
+        this.cpu.running = savedState.running;
+    }
+
+    /**
+     * Get raw bytes for instruction display
+     */
+    getInstructionBytes(address, size) {
+        const bytes = [];
+        for (let i = 0; i < size; i++) {
+            bytes.push(this.memory.readByte(address + i));
+        }
+        return bytes;
+    }
+
+    /**
+     * Determine end conditions for kickstart initialization
+     */
+    isEndOfInitialization(instruction, address) {
+        // End condition: RTS instruction that returns to user program
+        if (instruction.asm && instruction.asm.includes('RTS')) {
+            return true;
+        }
+        
+        // End condition: Jump to user program space (0x400000+ typically)
+        if (instruction.asm && instruction.asm.includes('JMP') && instruction.asm.includes('400')) {
+            return true;
+        }
+        
+        // End condition: Specific kickstart completion patterns
+        if (address > 0xF90000) { // Beyond typical kickstart range
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Generate checksum for instruction sequence validation
+     */
+    calculateSequenceChecksum() {
+        let checksum = 0;
+        for (const instr of this.initializationSequence) {
+            checksum ^= instr.opcode;
+            checksum = (checksum << 1) | (checksum >> 31); // Rotate left
+        }
+        return checksum >>> 0; // Ensure unsigned 32-bit
+    }
+
+    /**
+     * Log complete disassembly to console (leveraging CPU's formatting)
+     */
+    logDisassemblyToConsole() {
+        console.log('\n🔍 === KICKSTART INITIALIZATION DISASSEMBLY ===');
+        console.log('📋 Complete ASM code sequence (using CPU opcode parsing):');
+        console.log('═'.repeat(80));
+        
+        this.initializationSequence.forEach((instr, index) => {
+            const addrStr = `0x${instr.address.toString(16).toUpperCase().padStart(8, '0')}`;
+            const bytesStr = instr.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+            const indexStr = `[${index.toString().padStart(3, '0')}]`;
+            const cyclesStr = `(${instr.cycles}c)`;
+            
+            console.log(`${indexStr} ${addrStr}: ${bytesStr.padEnd(12)} ${instr.fullInstruction.padEnd(25)} ${cyclesStr.padEnd(6)} ; ${instr.description}`);
+        });
+        
+        console.log('═'.repeat(80));
+        console.log(`✅ Total: ${this.initializationSequence.length} instructions disassembled`);
+        
+        // Summary statistics
+        const totalCycles = this.initializationSequence.reduce((sum, instr) => sum + instr.cycles, 0);
+        console.log(`⏱️ Estimated cycles: ${totalCycles} (${(totalCycles / 14).toFixed(1)}ms at 14MHz)`);
+    }
+
+    /**
+     * Validate current execution against disassembly checklist
+     * This now leverages the CPU's own execution results
+     */
+    validateExecutionStep(currentPC, executedOpcode, cpuResult) {
+        const expectedInstruction = this.initializationSequence[this.currentInstructionIndex];
+        
+        if (!expectedInstruction) {
+            this.errors.push({
+                type: 'SEQUENCE_OVERFLOW',
+                message: `Execution beyond disassembled sequence at instruction ${this.currentInstructionIndex}`,
+                currentPC: currentPC,
+                executedOpcode: executedOpcode
+            });
+            return { valid: false, error: 'Execution beyond expected sequence' };
+        }
+
+        // Validate PC matches expected address
+        if (currentPC !== expectedInstruction.address) {
+            this.errors.push({
+                type: 'PC_MISMATCH',
+                message: `PC mismatch: expected 0x${expectedInstruction.address.toString(16)}, got 0x${currentPC.toString(16)}`,
+                expected: expectedInstruction,
+                actual: { pc: currentPC, opcode: executedOpcode }
+            });
+            return { valid: false, error: 'PC address mismatch' };
+        }
+
+        // Validate opcode matches expected instruction
+        if (executedOpcode !== expectedInstruction.opcode) {
+            this.errors.push({
+                type: 'OPCODE_MISMATCH',
+                message: `Opcode mismatch at 0x${currentPC.toString(16)}: expected 0x${expectedInstruction.opcode.toString(16)}, got 0x${executedOpcode.toString(16)}`,
+                expected: expectedInstruction,
+                actual: { pc: currentPC, opcode: executedOpcode }
+            });
+            return { valid: false, error: 'Opcode mismatch' };
+        }
+
+        // Additional validation: check if CPU's decoded instruction matches our disassembly
+        if (cpuResult && cpuResult.asm && expectedInstruction.mnemonic) {
+            const normalizedCPU = cpuResult.asm.replace(/\s+/g, ' ').trim();
+            const normalizedExpected = expectedInstruction.mnemonic.replace(/\s+/g, ' ').trim();
+            
+            if (normalizedCPU !== normalizedExpected) {
+                console.log(`⚠️ [VALIDATE] Instruction format mismatch (non-critical):`);
+                console.log(`  Expected: ${normalizedExpected}`);
+                console.log(`  CPU gave: ${normalizedCPU}`);
+                // This is non-critical - continue execution
+            }
+        }
+
+        // Validation passed
+        console.log(`✅ [VALIDATE] Step ${this.currentInstructionIndex}: 0x${currentPC.toString(16)} → ${expectedInstruction.fullInstruction} (${expectedInstruction.cycles}c)`);
+        this.currentInstructionIndex++;
+        
+        return { 
+            valid: true, 
+            instruction: expectedInstruction,
+            progress: {
+                current: this.currentInstructionIndex,
+                total: this.initializationSequence.length,
+                percentage: Math.round((this.currentInstructionIndex / this.initializationSequence.length) * 100)
+            }
+        };
+    }
+
+    /**
+     * Reset validation state for new execution
+     */
+    resetValidation() {
+        this.currentInstructionIndex = 0;
+        this.errors = [];
+        console.log('🔄 [VALIDATE] Validation state reset');
+    }
+
+    /**
+     * Get current validation status
+     */
+    getValidationStatus() {
+        return {
+            currentIndex: this.currentInstructionIndex,
+            totalInstructions: this.initializationSequence.length,
+            errorsCount: this.errors.length,
+            errors: this.errors,
+            isComplete: this.currentInstructionIndex >= this.initializationSequence.length,
+            progress: this.initializationSequence.length > 0 ? 
+                Math.round((this.currentInstructionIndex / this.initializationSequence.length) * 100) : 0
+        };
+    }
+
+    /**
+     * Get disassembly for frontend display
+     */
+    getDisassemblyForFrontend() {
+        return {
+            instructions: this.initializationSequence.map(instr => ({
+                index: instr.index,
+                address: `0x${instr.address.toString(16).toUpperCase()}`,
+                bytes: instr.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+                instruction: instr.fullInstruction,
+                description: instr.description,
+                cycles: instr.cycles,
+                executed: instr.index < this.currentInstructionIndex,
+                current: instr.index === this.currentInstructionIndex
+            })),
+            progress: this.getValidationStatus()
+        };
+    }
+}
+
+module.exports = KickstartDisassembler;
+
+-----------------------
+AmigaInterpreter class from /src/AmigaInterpretor.js (edited) : 
+// Enhanced AmigaInterpreter.js - Integration with Kickstart Disassembly and Validation
+
+const KickstartDisassembler = require('./KickstartDisassembler');
+
+class AmigaInterpreter {
+    constructor() {
+        // ... existing constructor code ...
+        
+        // Add disassembler - now uses CPU for opcode parsing
+        this.kickstartDisassembler = null;
+        this.kickstartInitialized = false;
+        this.validationMode = false;
+        this.disassemblyAvailable = false;
+    }
+
+    // ... existing methods ...
+
+    /**
+     * Initialize kickstart disassembly after ROM loading
+     * Now leverages existing CPU opcode parsing instead of duplicating logic
+     */
+    async initializeKickstartDisassembly() {
+        console.log('🔍 [INTERPRETER] Initializing kickstart disassembly using CPU opcode parsing...');
+        
+        if (!this.memory.romResetVectors) {
+            throw new Error('ROM not loaded - cannot disassemble kickstart');
+        }
+
+        // Create disassembler that uses our existing CPU for opcode parsing
+        this.kickstartDisassembler = new KickstartDisassembler(this.memory, this.cpu);
+        
+        try {
+            const disassemblyResult = await this.kickstartDisassembler.disassembleKickstartInit();
+            
+            console.log(`✅ [INTERPRETER] Kickstart disassembly complete: ${disassemblyResult.totalInstructions} instructions`);
+            console.log(`🔑 [INTERPRETER] Sequence checksum: 0x${disassemblyResult.checksum.toString(16)}`);
+            console.log(`🧠 [INTERPRETER] Used existing CPU opcode parsing - no code duplication!`);
+            
+            this.disassemblyAvailable = true;
+            this.kickstartInitialized = true;
+            
+            return {
+                success: true,
+                disassembly: disassemblyResult,
+                frontendData: this.kickstartDisassembler.getDisassemblyForFrontend()
+            };
+            
+        } catch (error) {
+            console.error('❌ [INTERPRETER] Kickstart disassembly failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Enable validation mode for step-through execution
+     */
+    enableValidationMode() {
+        if (!this.disassemblyAvailable) {
+            throw new Error('Disassembly not available - run initializeKickstartDisassembly() first');
+        }
+        
+        this.validationMode = true;
+        this.kickstartDisassembler.resetValidation();
+        
+        console.log('🔒 [INTERPRETER] Validation mode enabled - execution will be checked against disassembly');
+        
+        return {
+            success: true,
+            message: 'Validation mode enabled',
+            totalInstructions: this.kickstartDisassembler.initializationSequence.length
+        };
+    }
+
+    /**
+     * Disable validation mode
+     */
+    disableValidationMode() {
+        this.validationMode = false;
+        console.log('🔓 [INTERPRETER] Validation mode disabled');
+        
+        return {
+            success: true,
+            message: 'Validation mode disabled'
+        };
+    }
+
+    /**
+     * Enhanced step function with validation
+     * Now passes CPU execution results to validator for better checking
+     */
+    async stepWithValidation() {
+        if (!this.validationMode) {
+            // Fall back to normal step
+            return this.step();
+        }
+
+        try {
+            // Get current state before execution
+            const beforePC = this.cpu.registers.pc;
+            const beforeOpcode = this.memory.readWord(beforePC);
+            
+            // Execute the step and capture detailed CPU results
+            const stepResult = this.step();
+            
+            if (!stepResult.success) {
+                return stepResult;
+            }
+
+            // Validate against disassembly checklist - now with CPU results
+            const validation = this.kickstartDisassembler.validateExecutionStep(
+                beforePC, 
+                beforeOpcode, 
+                stepResult.cpu  // Pass CPU execution results for enhanced validation
+            );
+            
+            if (!validation.valid) {
+                // Validation failed - flag error and stop execution
+                console.error('🚨 [VALIDATION] Execution validation failed!');
+                console.error(`❌ [VALIDATION] ${validation.error}`);
+                
+                this.cpu.running = false;
+                
+                return {
+                    success: false,
+                    error: validation.error,
+                    validation: {
+                        failed: true,
+                        reason: validation.error,
+                        expected: validation.expected,
+                        actual: { pc: beforePC, opcode: beforeOpcode }
+                    },
+                    cpu: this.cpu.getState(),
+                    disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+                };
+            }
+
+            // Validation passed
+            console.log(`✅ [VALIDATION] Step validated: ${validation.instruction.fullInstruction} (${validation.instruction.cycles}c)`);
+            
+            return {
+                success: true,
+                cpu: this.cpu.getState(),
+                validation: {
+                    passed: true,
+                    instruction: validation.instruction,
+                    progress: validation.progress
+                },
+                disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+            };
+
+        } catch (error) {
+            console.error('❌ [VALIDATION] Step validation error:', error);
+            return {
+                success: false,
+                error: error.message,
+                validation: { error: true }
+            };
+        }
+    }
+
+    /**
+     * Run with validation until completion or error
+     */
+    async runWithValidation() {
+        if (!this.validationMode) {
+            return this.run();
+        }
+
+        console.log('🏃 [VALIDATION] Starting validated execution run...');
+        
+        let stepCount = 0;
+        const maxSteps = 10000; // Safety limit
+        
+        while (this.cpu.running && stepCount < maxSteps) {
+            const stepResult = await this.stepWithValidation();
+            
+            if (!stepResult.success) {
+                console.log(`🛑 [VALIDATION] Run stopped at step ${stepCount}: ${stepResult.error}`);
+                return stepResult;
+            }
+            
+            stepCount++;
+            
+            // Check if we've completed the initialization sequence
+            const status = this.kickstartDisassembler.getValidationStatus();
+            if (status.isComplete) {
+                console.log('🎉 [VALIDATION] Kickstart initialization sequence completed successfully!');
+                break;
+            }
+        }
+        
+        return {
+            success: true,
+            message: `Validated execution completed: ${stepCount} steps`,
+            totalSteps: stepCount,
+            validation: this.kickstartDisassembler.getValidationStatus(),
+            cpu: this.cpu.getState(),
+            disassembly: this.kickstartDisassembler.getDisassemblyForFrontend()
+        };
+    }
+
+    /**
+     * Get current kickstart disassembly status
+     */
+    getKickstartStatus() {
+        return {
+            initialized: this.kickstartInitialized,
+            disassemblyAvailable: this.disassemblyAvailable,
+            validationMode: this.validationMode,
+            validation: this.kickstartDisassembler ? this.kickstartDisassembler.getValidationStatus() : null,
+            disassembly: this.kickstartDisassembler ? this.kickstartDisassembler.getDisassemblyForFrontend() : null
+        };
+    }
+
+    /**
+     * Reset kickstart validation state
+     */
+    resetKickstartValidation() {
+        if (this.kickstartDisassembler) {
+            this.kickstartDisassembler.resetValidation();
+        }
+        
+        return {
+            success: true,
+            message: 'Kickstart validation reset'
+        };
+    }
+
+    // ... rest of existing methods ...
+}
+
+module.exports = AmigaInterpreter;
+
+api endpoints at /src/server.js (edited): 
+ // Additional server.js endpoints for kickstart disassembly functionality
+
+// Add these endpoints to your existing server.js file
+
+// Initialize kickstart disassembly after ROM loading
+app.post('/kickstart/disassemble', async (req, res) => {
+    try {
+        console.log('🔍 [SERVER] Kickstart disassembly requested...');
+        
+        const result = await interpreter.initializeKickstartDisassembly();
+        
+        if (result.success) {
+            res.json({
+                success: true,
+                message: `Kickstart disassembled: ${result.disassembly.totalInstructions} instructions`,
+                disassembly: result.disassembly,
+                frontend: result.frontendData
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: result.error
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Kickstart disassembly error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to disassemble kickstart: ' + error.message
+        });
+    }
+});
+
+// Enable validation mode for step-through execution
+app.post('/kickstart/validation/enable', (req, res) => {
+    try {
+        const result = interpreter.enableValidationMode();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Enable validation error:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Disable validation mode
+app.post('/kickstart/validation/disable', (req, res) => {
+    try {
+        const result = interpreter.disableValidationMode();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Disable validation error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Reset validation state
+app.post('/kickstart/validation/reset', (req, res) => {
+    try {
+        const result = interpreter.resetKickstartValidation();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Reset validation error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get kickstart status and disassembly
+app.get('/kickstart/status', (req, res) => {
+    try {
+        const status = interpreter.getKickstartStatus();
+        res.json({
+            success: true,
+            status: status
+        });
+    } catch (error) {
+        console.error('❌ [SERVER] Get kickstart status error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Enhanced step endpoint with validation
+app.post('/step-validated', async (req, res) => {
+    try {
+        console.log('👣 [SERVER] Validated step requested...');
+        
+        const result = await interpreter.stepWithValidation();
+        
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Validated step error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Step validation failed: ' + error.message
+        });
+    }
+});
+
+// Enhanced run endpoint with validation
+app.post('/run-validated', async (req, res) => {
+    try {
+        console.log('🏃 [SERVER] Validated run requested...');
+        
+        const result = await interpreter.runWithValidation();
+        
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Validated run error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Run validation failed: ' + error.message
+        });
+    }
+});
+
+// Get disassembly for frontend display
+app.get('/kickstart/disassembly', (req, res) => {
+    try {
+        if (!interpreter.kickstartDisassembler) {
+            return res.status(400).json({
+                success: false,
+                error: 'Kickstart not disassembled yet - run /kickstart/disassemble first'
+            });
+        }
+        
+        const frontendData = interpreter.kickstartDisassembler.getDisassemblyForFrontend();
+        
+        res.json({
+            success: true,
+            disassembly: frontendData
+        });
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Get disassembly error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Complete workflow endpoint: Load ROM + Disassemble + Enable Validation
+app.post('/kickstart/initialize-complete', async (req, res) => {
+    try {
+        console.log('🚀 [SERVER] Complete kickstart initialization workflow...');
+        
+        // Step 1: Load ROM (if not already loaded)
+        if (!interpreter.memory.romResetVectors) {
+            console.log('📁 [SERVER] Loading default ROM first...');
+            const romResult = await interpreter.memory.loadAvailableROM('kickstart31_a1200');
+            if (!romResult.success) {
+                throw new Error('ROM loading failed: ' + romResult.error);
+            }
+        }
+        
+        // Step 2: Initialize CPU from ROM vectors
+        if (!interpreter.memory.romDrivenMode) {
+            console.log('🎯 [SERVER] Enabling ROM-driven mode...');
+            const romModeResult = interpreter.memory.enableROMDrivenMode();
+            if (!romModeResult.success) {
+                throw new Error('ROM-driven mode failed: ' + romModeResult.error);
+            }
+            
+            const cpuInitResult = interpreter.cpu.initializeFromROMVectors(interpreter.memory.romResetVectors);
+            if (!cpuInitResult.success) {
+                throw new Error('CPU initialization failed: ' + cpuInitResult.error);
+            }
+        }
+        
+        // Step 3: Disassemble kickstart initialization
+        console.log('🔍 [SERVER] Disassembling kickstart...');
+        const disasmResult = await interpreter.initializeKickstartDisassembly();
+        if (!disasmResult.success) {
+            throw new Error('Disassembly failed: ' + disasmResult.error);
+        }
+        
+        // Step 4: Enable validation mode
+        console.log('🔒 [SERVER] Enabling validation mode...');
+        const validationResult = interpreter.enableValidationMode();
+        if (!validationResult.success) {
+            throw new Error('Validation mode failed: ' + validationResult.error);
+        }
+        
+        // Return complete status
+        res.json({
+            success: true,
+            message: 'Kickstart initialization complete - ready for validated execution',
+            workflow: {
+                romLoaded: true,
+                cpuInitialized: true,
+                disassembled: true,
+                validationEnabled: true
+            },
+            disassembly: {
+                totalInstructions: disasmResult.disassembly.totalInstructions,
+                checksum: disasmResult.disassembly.checksum
+            },
+            resetVectors: interpreter.memory.romResetVectors,
+            frontend: disasmResult.frontendData
+        });
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Complete initialization error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Complete initialization failed: ' + error.message
+        });
+    }
+});
+
+--------------
+frontend code at /public/index.html (edited)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amiga Emulator - Kickstart Disassembly</title>
+    <style>
+        /* Add these styles to your existing CSS */
+        
+        .disassembly-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .disassembly-header {
+            background: #2d2d2d;
+            color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .instruction-line {
+            display: flex;
+            align-items: center;
+            padding: 2px 0;
+            border-left: 3px solid transparent;
+            padding-left: 8px;
+            margin: 1px 0;
+        }
+        
+        .instruction-line.executed {
+            background: rgba(0, 255, 0, 0.1);
+            border-left-color: #00ff00;
+        }
+        
+        .instruction-line.current {
+            background: rgba(255, 255, 0, 0.2);
+            border-left-color: #ffff00;
+            font-weight: bold;
+        }
+        
+        .instruction-line.error {
+            background: rgba(255, 0, 0, 0.2);
+            border-left-color: #ff0000;
+        }
+        
+        .instr-index {
+            color: #666;
+            width: 40px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        
+        .instr-address {
+            color: #8af;
+            width: 80px;
+            margin-right: 10px;
+        }
+        
+        .instr-bytes {
+            color: #fa8;
+            width: 100px;
+            margin-right: 10px;
+            font-family: monospace;
+        }
+        
+        .instr-mnemonic {
+            color: #fff;
+            width: 150px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .instr-description {
+            color: #aaa;
+            flex: 1;
+            font-style: italic;
+        }
+        
+        .validation-status {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .validation-progress {
+            background: #333;
+            border-radius: 10px;
+            height: 20px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .validation-progress-bar {
+            background: linear-gradient(90deg, #00ff00, #ffff00);
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .kickstart-controls {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .control-group {
+            margin: 10px 0;
+        }
+        
+        .control-group label {
+            display: block;
+            color: #ccc;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-kickstart {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-kickstart:hover {
+            background: #357abd;
+        }
+        
+        .btn-kickstart:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .validation-error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff4444;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            color: #ff4444;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.ready { background: #00ff00; }
+        .status-indicator.error { background: #ff0000; }
+        .status-indicator.pending { background: #ffff00; }
+        .status-indicator.disabled { background: #666; }
+    </style>
+</head>
+<body>
+    <!-- Add this section to your existing HTML -->
+    
+    <div class="kickstart-section">
+        <h2>🔍 Kickstart Initialization Analysis</h2>
+        
+        <!-- Kickstart Controls -->
+        <div class="kickstart-controls">
+            <div class="control-group">
+                <label>Kickstart Analysis Controls:</label>
+                <div class="button-group">
+                    <button id="initializeCompleteBtn" class="btn-kickstart">
+                        🚀 Complete Initialization
+                    </button>
+                    <button id="disassembleBtn" class="btn-kickstart" disabled>
+                        🔍 Disassemble Kickstart
+                    </button>
+                    <button id="enableValidationBtn" class="btn-kickstart" disabled>
+                        🔒 Enable Validation
+                    </button>
+                    <button id="disableValidationBtn" class="btn-kickstart" disabled>
+                        🔓 Disable Validation
+                    </button>
+                    <button id="resetValidationBtn" class="btn-kickstart" disabled>
+                        🔄 Reset Validation
+                    </button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Validated Execution:</label>
+                <div class="button-group">
+                    <button id="stepValidatedBtn" class="btn-kickstart" disabled>
+                        👣 Step (Validated)
+                    </button>
+                    <button id="runValidatedBtn" class="btn-kickstart" disabled>
+                        🏃 Run (Validated)
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Validation Status -->
+        <div id="validationStatus" class="validation-status" style="display: none;">
+            <h3>🔒 Validation Status</h3>
+            <div id="validationInfo"></div>
+            <div class="validation-progress">
+                <div id="validationProgressBar" class="validation-progress-bar" style="width: 0%;"></div>
+            </div>
+            <div id="validationProgressText">0 / 0 instructions (0%)</div>
+        </div>
+        
+        <!-- Validation Errors -->
+        <div id="validationErrors" class="validation-error" style="display: none;">
+            <h3>🚨 Validation Errors</h3>
+            <div id="validationErrorList"></div>
+        </div>
+        
+        <!-- Disassembly Display -->
+        <div id="disassemblyPanel" class="disassembly-panel" style="display: none;">
+            <div class="disassembly-header">
+                <h3>📋 Kickstart Initialization Disassembly</h3>
+                <div id="disassemblyInfo"></div>
+            </div>
+            <div id="disassemblyContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Add these functions to your existing JavaScript
+        
+        class KickstartManager {
+            constructor() {
+                this.initialized = false;
+                this.disassembled = false;
+                this.validationEnabled = false;
+                this.currentDisassembly = null;
+                
+                this.initializeEventHandlers();
+            }
+            
+            initializeEventHandlers() {
+                document.getElementById('initializeCompleteBtn').addEventListener('click', () => this.initializeComplete());
+                document.getElementById('disassembleBtn').addEventListener('click', () => this.disassembleKickstart());
+                document.getElementById('enableValidationBtn').addEventListener('click', () => this.enableValidation());
+                document.getElementById('disableValidationBtn').addEventListener('click', () => this.disableValidation());
+                document.getElementById('resetValidationBtn').addEventListener('click', () => this.resetValidation());
+                document.getElementById('stepValidatedBtn').addEventListener('click', () => this.stepValidated());
+                document.getElementById('runValidatedBtn').addEventListener('click', () => this.runValidated());
+            }
+            
+            async initializeComplete() {
+                this.log('🚀 Starting complete kickstart initialization...', 'info');
+                this.setButtonState('initializeCompleteBtn', false);
+                
+                try {
+                    const response = await fetch('/kickstart/initialize-complete', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('✅ Complete kickstart initialization successful!', 'success');
+                        this.log(`📊 Disassembled ${result.disassembly.totalInstructions} instructions`, 'info');
+                        this.log(`🔑 Sequence checksum: 0x${result.disassembly.checksum.toString(16)}`, 'info');
+                        
+                        this.initialized = true;
+                        this.disassembled = true;
+                        this.validationEnabled = true;
+                        
+                        this.updateDisassemblyDisplay(result.frontend);
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                        this.showStatus('Kickstart initialized and ready for validated execution!', 'success');
+                        
+                    } else {
+                        this.log(`❌ Complete initialization failed: ${result.error}`, 'error');
+                        this.showStatus('Complete initialization failed', 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Complete initialization error: ${error.message}`, 'error');
+                    this.showStatus('Complete initialization failed', 'error');
+                    
+                } finally {
+                    this.setButtonState('initializeCompleteBtn', true);
+                }
+            }
+            
+            async disassembleKickstart() {
+                this.log('🔍 Starting kickstart disassembly...', 'info');
+                this.setButtonState('disassembleBtn', false);
+                
+                try {
+                    const response = await fetch('/kickstart/disassemble', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ Kickstart disassembled: ${result.disassembly.totalInstructions} instructions`, 'success');
+                        this.disassembled = true;
+                        this.updateDisassemblyDisplay(result.frontend);
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Disassembly failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Disassembly error: ${error.message}`, 'error');
+                    
+                } finally {
+                    this.setButtonState('disassembleBtn', true);
+                }
+            }
+            
+            async enableValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/enable', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔒 Validation mode enabled', 'success');
+                        this.validationEnabled = true;
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Enable validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Enable validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async disableValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/disable', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔓 Validation mode disabled', 'info');
+                        this.validationEnabled = false;
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Disable validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Disable validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async resetValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/reset', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔄 Validation state reset', 'info');
+                        this.updateValidationStatus();
+                        await this.refreshDisassembly();
+                        
+                    } else {
+                        this.log(`❌ Reset validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Reset validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async stepValidated() {
+                this.log('👣 Executing validated step...', 'info');
+                
+                try {
+                    const response = await fetch('/step-validated', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        if (result.validation && result.validation.passed) {
+                            this.log(`✅ Step validated: ${result.validation.instruction.fullInstruction}`, 'success');
+                            this.updateValidationProgress(result.validation.progress);
+                            this.updateDisassemblyDisplay(result.disassembly);
+                            
+                        } else {
+                            this.log('⚠️ Step executed but validation info missing', 'warning');
+                        }
+                        
+                    } else {
+                        this.log(`🚨 Step validation failed: ${result.error}`, 'error');
+                        
+                        if (result.validation && result.validation.failed) {
+                            this.showValidationError(result.validation);
+                        }
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Validated step error: ${error.message}`, 'error');
+                }
+            }
+            
+            async runValidated() {
+                this.log('🏃 Starting validated execution run...', 'info');
+                this.setButtonState('runValidatedBtn', false);
+                
+                try {
+                    const response = await fetch('/run-validated', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ Validated run completed: ${result.totalSteps} steps`, 'success');
+                        
+                        if (result.validation && result.validation.isComplete) {
+                            this.log('🎉 Kickstart initialization sequence completed!', 'success');
+                        }
+                        
+                        this.updateValidationStatus(result.validation);
+                        this.updateDisassemblyDisplay(result.disassembly);
+                        
+                    } else {
+                        this.log(`🚨 Validated run failed: ${result.error}`, 'error');
+                        
+                        if (result.validation && result.validation.failed) {
+                            this.showValidationError(result.validation);
+                        }
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Validated run error: ${error.message}`, 'error');
+                    
+                } finally {
+                    this.setButtonState('runValidatedBtn', true);
+                }
+            }
+            
+            updateDisassemblyDisplay(disassemblyData) {
+                if (!disassemblyData) return;
+                
+                this.currentDisassembly = disassemblyData;
+                
+                const panel = document.getElementById('disassemblyPanel');
+                const info = document.getElementById('disassemblyInfo');
+                const content = document.getElementById('disassemblyContent');
+                
+                // Show panel
+                panel.style.display = 'block';
+                
+                // Update info
+                const progress = disassemblyData.progress;
+                info.innerHTML = `
+                    <div><span class="status-indicator ready"></span>Total Instructions: ${disassemblyData.instructions.length}</div>
+                    <div><span class="status-indicator ${progress.isComplete ? 'ready' : 'pending'}"></span>Progress: ${progress.current} / ${progress.total} (${progress.progress}%)</div>
+                    <div><span class="status-indicator ${progress.errorsCount > 0 ? 'error' : 'ready'}"></span>Errors: ${progress.errorsCount}</div>
+                `;
+                
+                // Update content
+                content.innerHTML = disassemblyData.instructions.map(instr => {
+                    let className = 'instruction-line';
+                    if (instr.executed) className += ' executed';
+                    if (instr.current) className += ' current';
+                    
+                    return `
+                        <div class="${className}">
+                            <span class="instr-index">[${instr.index.toString().padStart(3, '0')}]</span>
+                            <span class="instr-address">${instr.address}:</span>
+                            <span class="instr-bytes">${instr.bytes}</span>
+                            <span class="instr-mnemonic">${instr.instruction}</span>
+                            <span class="instr-description">${instr.description}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Scroll to current instruction
+                const currentLine = content.querySelector('.current');
+                if (currentLine) {
+                    currentLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            
+            updateValidationStatus(validationData) {
+                const statusDiv = document.getElementById('validationStatus');
+                const infoDiv = document.getElementById('validationInfo');
+                
+                if (this.validationEnabled) {
+                    statusDiv.style.display = 'block';
+                    
+                    const data = validationData || (this.currentDisassembly ? this.currentDisassembly.progress : null);
+                    
+                    if (data) {
+                        infoDiv.innerHTML = `
+                            <div><span class="status-indicator ready"></span>Validation Mode: Active</div>
+                            <div><span class="status-indicator ${data.isComplete ? 'ready' : 'pending'}"></span>Status: ${data.isComplete ? 'Complete' : 'In Progress'}</div>
+                            <div><span class="status-indicator ${data.errorsCount > 0 ? 'error' : 'ready'}"></span>Errors: ${data.errorsCount}</div>
+                        `;
+                        
+                        this.updateValidationProgress(data);
+                    }
+                } else {
+                    statusDiv.style.display = 'none';
+                }
+            }
+            
+            updateValidationProgress(progress) {
+                if (!progress) return;
+                
+                const progressBar = document.getElementById('validationProgressBar');
+                const progressText = document.getElementById('validationProgressText');
+                
+                const percentage = progress.percentage || progress.progress || 0;
+                const current = progress.current || 0;
+                const total = progress.total || 0;
+                
+                progressBar.style.width = `${percentage}%`;
+                progressText.textContent = `${current} / ${total} instructions (${percentage}%)`;
+            }
+            
+            showValidationError(validationError) {
+                const errorDiv = document.getElementById('validationErrors');
+                const errorList = document.getElementById('validationErrorList');
+                
+                errorDiv.style.display = 'block';
+                
+                errorList.innerHTML = `
+                    <div><strong>Validation Failed:</strong> ${validationError.reason}</div>
+                    <div><strong>Expected:</strong> ${validationError.expected ? validationError.expected.fullInstruction : 'N/A'}</div>
+                    <div><strong>Actual:</strong> PC=0x${validationError.actual.pc.toString(16)}, Opcode=0x${validationError.actual.opcode.toString(16)}</div>
+                `;
+            }
+            
+            async refreshDisassembly() {
+                try {
+                    const response = await fetch('/kickstart/disassembly');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updateDisassemblyDisplay(result.disassembly);
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh disassembly:', error);
+                }
+            }
+            
+            updateButtonStates() {
+                this.setButtonState('disassembleBtn', this.initialized);
+                this.setButtonState('enableValidationBtn', this.disassembled && !this.validationEnabled);
+                this.setButtonState('disableValidationBtn', this.validationEnabled);
+                this.setButtonState('resetValidationBtn', this.validationEnabled);
+                this.setButtonState('stepValidatedBtn', this.validationEnabled);
+                this.setButtonState('runValidatedBtn', this.validationEnabled);
+            }
+            
+            setButtonState(buttonId, enabled) {
+                const button = document.getElementById(buttonId);
+                if (button) {
+                    button.disabled = !enabled;
+                }
+            }
+            
+            log(message, type = 'info') {
+                // Integrate with existing log system
+                if (window.emulatorUI && window.emulatorUI.log) {
+                    window.emulatorUI.log(message, type);
+                } else {
+                    console.log(`[${type.toUpperCase()}] ${message}`);
+                }
+            }
+            
+            showStatus(message, type = 'info') {
+                // Integrate with existing status system
+                if (window.emulatorUI && window.emulatorUI.showStatus) {
+                    window.emulatorUI.showStatus(message, type);
+                } else {
+                    console.log(`[${type.toUpperCase()}] ${message}`);
+                }
+            }
+        }
+        
+        // Initialize kickstart manager when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            window.kickstartManager = new KickstartManager();
+        });
+        
+        // Integration with existing emulator UI
+        if (window.emulatorUI) {
+            // Extend existing UI with kickstart functionality
+            const originalLoadDefaultROM = window.emulatorUI.loadDefaultROM;
+            
+            window.emulatorUI.loadDefaultROM = async function() {
+                const result = await originalLoadDefaultROM.call(this);
+                
+                // After ROM loads, enable kickstart controls
+                if (result && window.kickstartManager) {
+                    window.kickstartManager.initialized = true;
+                    window.kickstartManager.updateButtonStates();
+                }
+                
+                return result;
+            };
+        }
+    </script>
+</body>
+</html>

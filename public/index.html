@@ -281,6 +281,176 @@
             border: none;
             border-top: 1px solid #444;
         }
+
+        /* Kickstart Disassembly Styles */
+        .disassembly-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .disassembly-header {
+            background: #2d2d2d;
+            color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .instruction-line {
+            display: flex;
+            align-items: center;
+            padding: 2px 0;
+            border-left: 3px solid transparent;
+            padding-left: 8px;
+            margin: 1px 0;
+        }
+        
+        .instruction-line.executed {
+            background: rgba(0, 255, 0, 0.1);
+            border-left-color: #00ff00;
+        }
+        
+        .instruction-line.current {
+            background: rgba(255, 255, 0, 0.2);
+            border-left-color: #ffff00;
+            font-weight: bold;
+        }
+        
+        .instruction-line.error {
+            background: rgba(255, 0, 0, 0.2);
+            border-left-color: #ff0000;
+        }
+        
+        .instr-index {
+            color: #666;
+            width: 40px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        
+        .instr-address {
+            color: #8af;
+            width: 80px;
+            margin-right: 10px;
+        }
+        
+        .instr-bytes {
+            color: #fa8;
+            width: 100px;
+            margin-right: 10px;
+            font-family: monospace;
+        }
+        
+        .instr-mnemonic {
+            color: #fff;
+            width: 150px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .instr-description {
+            color: #aaa;
+            flex: 1;
+            font-style: italic;
+        }
+        
+        .validation-status {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .validation-progress {
+            background: #333;
+            border-radius: 10px;
+            height: 20px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .validation-progress-bar {
+            background: linear-gradient(90deg, #00ff00, #ffff00);
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .kickstart-controls {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .control-group {
+            margin: 10px 0;
+        }
+        
+        .control-group label {
+            display: block;
+            color: #ccc;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-kickstart {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-kickstart:hover {
+            background: #357abd;
+        }
+        
+        .btn-kickstart:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .validation-error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff4444;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            color: #ff4444;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.ready { background: #00ff00; }
+        .status-indicator.error { background: #ff0000; }
+        .status-indicator.pending { background: #ffff00; }
+        .status-indicator.disabled { background: #666; }
     </style>
 </head>
 <body>
@@ -417,6 +587,72 @@
             <h2>Log</h2>
             <div class="log-container" id="logContainer">
                 <div class="log-entry info">Amiga Executable Runner initialized</div>
+            </div>
+        </div>
+
+        <!-- Kickstart Disassembly Section -->
+        <div class="panel">
+            <h2>🔍 Kickstart Initialization Analysis</h2>
+            
+            <!-- Kickstart Controls -->
+            <div class="kickstart-controls">
+                <div class="control-group">
+                    <label>Kickstart Analysis Controls:</label>
+                    <div class="button-group">
+                        <button id="initializeCompleteBtn" class="btn-kickstart">
+                            🚀 Complete Initialization
+                        </button>
+                        <button id="disassembleBtn" class="btn-kickstart" disabled>
+                            🔍 Disassemble Kickstart
+                        </button>
+                        <button id="enableValidationBtn" class="btn-kickstart" disabled>
+                            🔒 Enable Validation
+                        </button>
+                        <button id="disableValidationBtn" class="btn-kickstart" disabled>
+                            🔓 Disable Validation
+                        </button>
+                        <button id="resetValidationBtn" class="btn-kickstart" disabled>
+                            🔄 Reset Validation
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Validated Execution:</label>
+                    <div class="button-group">
+                        <button id="stepValidatedBtn" class="btn-kickstart" disabled>
+                            👣 Step (Validated)
+                        </button>
+                        <button id="runValidatedBtn" class="btn-kickstart" disabled>
+                            🏃 Run (Validated)
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Validation Status -->
+            <div id="validationStatus" class="validation-status" style="display: none;">
+                <h3>🔒 Validation Status</h3>
+                <div id="validationInfo"></div>
+                <div class="validation-progress">
+                    <div id="validationProgressBar" class="validation-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div id="validationProgressText">0 / 0 instructions (0%)</div>
+            </div>
+            
+            <!-- Validation Errors -->
+            <div id="validationErrors" class="validation-error" style="display: none;">
+                <h3>🚨 Validation Errors</h3>
+                <div id="validationErrorList"></div>
+            </div>
+            
+            <!-- Disassembly Display -->
+            <div id="disassemblyPanel" class="disassembly-panel" style="display: none;">
+                <div class="disassembly-header">
+                    <h3>📋 Kickstart Initialization Disassembly</h3>
+                    <div id="disassemblyInfo"></div>
+                </div>
+                <div id="disassemblyContent"></div>
             </div>
         </div>
     </div>
@@ -1490,8 +1726,358 @@
 
         }
 
+        // Kickstart Disassembly Manager
+        class KickstartManager {
+            constructor() {
+                this.initialized = false;
+                this.disassembled = false;
+                this.validationEnabled = false;
+                this.currentDisassembly = null;
+                
+                this.initializeEventHandlers();
+            }
+            
+            initializeEventHandlers() {
+                document.getElementById('initializeCompleteBtn').addEventListener('click', () => this.initializeComplete());
+                document.getElementById('disassembleBtn').addEventListener('click', () => this.disassembleKickstart());
+                document.getElementById('enableValidationBtn').addEventListener('click', () => this.enableValidation());
+                document.getElementById('disableValidationBtn').addEventListener('click', () => this.disableValidation());
+                document.getElementById('resetValidationBtn').addEventListener('click', () => this.resetValidation());
+                document.getElementById('stepValidatedBtn').addEventListener('click', () => this.stepValidated());
+                document.getElementById('runValidatedBtn').addEventListener('click', () => this.runValidated());
+            }
+            
+            async initializeComplete() {
+                this.log('🚀 Starting complete kickstart initialization...', 'info');
+                this.setButtonState('initializeCompleteBtn', false);
+                
+                try {
+                    const response = await fetch('/kickstart/initialize-complete', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('✅ Complete kickstart initialization successful!', 'success');
+                        this.log(`📊 Disassembled ${result.disassembly.totalInstructions} instructions`, 'info');
+                        this.log(`🔑 Sequence checksum: 0x${result.disassembly.checksum.toString(16)}`, 'info');
+                        
+                        this.initialized = true;
+                        this.disassembled = true;
+                        this.validationEnabled = true;
+                        
+                        this.updateDisassemblyDisplay(result.frontend);
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                        this.showStatus('Kickstart initialized and ready for validated execution!', 'success');
+                        
+                    } else {
+                        this.log(`❌ Complete initialization failed: ${result.error}`, 'error');
+                        this.showStatus('Complete initialization failed', 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Complete initialization error: ${error.message}`, 'error');
+                    this.showStatus('Complete initialization failed', 'error');
+                    
+                } finally {
+                    this.setButtonState('initializeCompleteBtn', true);
+                }
+            }
+            
+            async disassembleKickstart() {
+                this.log('🔍 Starting kickstart disassembly...', 'info');
+                this.setButtonState('disassembleBtn', false);
+                
+                try {
+                    const response = await fetch('/kickstart/disassemble', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ Kickstart disassembled: ${result.disassembly.totalInstructions} instructions`, 'success');
+                        this.disassembled = true;
+                        this.updateDisassemblyDisplay(result.frontend);
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Disassembly failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Disassembly error: ${error.message}`, 'error');
+                    
+                } finally {
+                    this.setButtonState('disassembleBtn', true);
+                }
+            }
+            
+            async enableValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/enable', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔒 Validation mode enabled', 'success');
+                        this.validationEnabled = true;
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Enable validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Enable validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async disableValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/disable', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔓 Validation mode disabled', 'info');
+                        this.validationEnabled = false;
+                        this.updateValidationStatus();
+                        this.updateButtonStates();
+                        
+                    } else {
+                        this.log(`❌ Disable validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Disable validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async resetValidation() {
+                try {
+                    const response = await fetch('/kickstart/validation/reset', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log('🔄 Validation state reset', 'info');
+                        this.updateValidationStatus();
+                        await this.refreshDisassembly();
+                        
+                    } else {
+                        this.log(`❌ Reset validation failed: ${result.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Reset validation error: ${error.message}`, 'error');
+                }
+            }
+            
+            async stepValidated() {
+                this.log('👣 Executing validated step...', 'info');
+                
+                try {
+                    const response = await fetch('/step-validated', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        if (result.validation && result.validation.passed) {
+                            this.log(`✅ Step validated: ${result.validation.instruction.fullInstruction}`, 'success');
+                            this.updateValidationProgress(result.validation.progress);
+                            this.updateDisassemblyDisplay(result.disassembly);
+                            
+                        } else {
+                            this.log('⚠️ Step executed but validation info missing', 'warning');
+                        }
+                        
+                    } else {
+                        this.log(`🚨 Step validation failed: ${result.error}`, 'error');
+                        
+                        if (result.validation && result.validation.failed) {
+                            this.showValidationError(result.validation);
+                        }
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Validated step error: ${error.message}`, 'error');
+                }
+            }
+            
+            async runValidated() {
+                this.log('🏃 Starting validated execution run...', 'info');
+                this.setButtonState('runValidatedBtn', false);
+                
+                try {
+                    const response = await fetch('/run-validated', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.log(`✅ Validated run completed: ${result.totalSteps} steps`, 'success');
+                        
+                        if (result.validation && result.validation.isComplete) {
+                            this.log('🎉 Kickstart initialization sequence completed!', 'success');
+                        }
+                        
+                        this.updateValidationStatus(result.validation);
+                        this.updateDisassemblyDisplay(result.disassembly);
+                        
+                    } else {
+                        this.log(`🚨 Validated run failed: ${result.error}`, 'error');
+                        
+                        if (result.validation && result.validation.failed) {
+                            this.showValidationError(result.validation);
+                        }
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Validated run error: ${error.message}`, 'error');
+                    
+                } finally {
+                    this.setButtonState('runValidatedBtn', true);
+                }
+            }
+            
+            updateDisassemblyDisplay(disassemblyData) {
+                if (!disassemblyData) return;
+                
+                this.currentDisassembly = disassemblyData;
+                
+                const panel = document.getElementById('disassemblyPanel');
+                const info = document.getElementById('disassemblyInfo');
+                const content = document.getElementById('disassemblyContent');
+                
+                // Show panel
+                panel.style.display = 'block';
+                
+                // Update info
+                const progress = disassemblyData.progress;
+                info.innerHTML = `
+                    <div><span class="status-indicator ready"></span>Total Instructions: ${disassemblyData.instructions.length}</div>
+                    <div><span class="status-indicator ${progress.isComplete ? 'ready' : 'pending'}"></span>Progress: ${progress.current} / ${progress.total} (${progress.progress}%)</div>
+                    <div><span class="status-indicator ${progress.errorsCount > 0 ? 'error' : 'ready'}"></span>Errors: ${progress.errorsCount}</div>
+                `;
+                
+                // Update content
+                content.innerHTML = disassemblyData.instructions.map(instr => {
+                    let className = 'instruction-line';
+                    if (instr.executed) className += ' executed';
+                    if (instr.current) className += ' current';
+                    
+                    return `
+                        <div class="${className}">
+                            <span class="instr-index">[${instr.index.toString().padStart(3, '0')}]</span>
+                            <span class="instr-address">${instr.address}:</span>
+                            <span class="instr-bytes">${instr.bytes}</span>
+                            <span class="instr-mnemonic">${instr.instruction}</span>
+                            <span class="instr-description">${instr.description}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Scroll to current instruction
+                const currentLine = content.querySelector('.current');
+                if (currentLine) {
+                    currentLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            
+            updateValidationStatus(validationData) {
+                const statusDiv = document.getElementById('validationStatus');
+                const infoDiv = document.getElementById('validationInfo');
+                
+                if (this.validationEnabled) {
+                    statusDiv.style.display = 'block';
+                    
+                    const data = validationData || (this.currentDisassembly ? this.currentDisassembly.progress : null);
+                    
+                    if (data) {
+                        infoDiv.innerHTML = `
+                            <div><span class="status-indicator ready"></span>Validation Mode: Active</div>
+                            <div><span class="status-indicator ${data.isComplete ? 'ready' : 'pending'}"></span>Status: ${data.isComplete ? 'Complete' : 'In Progress'}</div>
+                            <div><span class="status-indicator ${data.errorsCount > 0 ? 'error' : 'ready'}"></span>Errors: ${data.errorsCount}</div>
+                        `;
+                        
+                        this.updateValidationProgress(data);
+                    }
+                } else {
+                    statusDiv.style.display = 'none';
+                }
+            }
+            
+            updateValidationProgress(progress) {
+                if (!progress) return;
+                
+                const progressBar = document.getElementById('validationProgressBar');
+                const progressText = document.getElementById('validationProgressText');
+                
+                const percentage = progress.percentage || progress.progress || 0;
+                const current = progress.current || 0;
+                const total = progress.total || 0;
+                
+                progressBar.style.width = `${percentage}%`;
+                progressText.textContent = `${current} / ${total} instructions (${percentage}%)`;
+            }
+            
+            showValidationError(validationError) {
+                const errorDiv = document.getElementById('validationErrors');
+                const errorList = document.getElementById('validationErrorList');
+                
+                errorDiv.style.display = 'block';
+                
+                errorList.innerHTML = `
+                    <div><strong>Validation Failed:</strong> ${validationError.reason}</div>
+                    <div><strong>Expected:</strong> ${validationError.expected ? validationError.expected.fullInstruction : 'N/A'}</div>
+                    <div><strong>Actual:</strong> PC=0x${validationError.actual.pc.toString(16)}, Opcode=0x${validationError.actual.opcode.toString(16)}</div>
+                `;
+            }
+            
+            async refreshDisassembly() {
+                try {
+                    const response = await fetch('/kickstart/disassembly');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updateDisassemblyDisplay(result.disassembly);
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh disassembly:', error);
+                }
+            }
+            
+            updateButtonStates() {
+                this.setButtonState('disassembleBtn', this.initialized);
+                this.setButtonState('enableValidationBtn', this.disassembled && !this.validationEnabled);
+                this.setButtonState('disableValidationBtn', this.validationEnabled);
+                this.setButtonState('resetValidationBtn', this.validationEnabled);
+                this.setButtonState('stepValidatedBtn', this.validationEnabled);
+                this.setButtonState('runValidatedBtn', this.validationEnabled);
+            }
+            
+            setButtonState(buttonId, enabled) {
+                const button = document.getElementById(buttonId);
+                if (button) {
+                    button.disabled = !enabled;
+                }
+            }
+            
+            log(message, type = 'info') {
+                // Integrate with existing log system
+                if (window.amigaRunner && window.amigaRunner.log) {
+                    window.amigaRunner.log(message, type);
+                } else {
+                    console.log(`[${type.toUpperCase()}] ${message}`);
+                }
+            }
+            
+            showStatus(message, type = 'info') {
+                // Integrate with existing status system
+                if (window.amigaRunner && window.amigaRunner.showStatus) {
+                    window.amigaRunner.showStatus(message, type);
+                } else {
+                    console.log(`[${type.toUpperCase()}] ${message}`);
+                }
+            }
+        }
+
         // Global functions for memory panel controls
         let amigaRunner;
+        let kickstartManager;
 
         function startMemoryResize(e) {
             if (amigaRunner) {
@@ -1514,6 +2100,7 @@
         // Initialize the application
         document.addEventListener('DOMContentLoaded', () => {
             amigaRunner = new AmigaRunner();
+            kickstartManager = new KickstartManager();
         });
     </script>
 </body>

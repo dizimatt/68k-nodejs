@@ -256,6 +256,32 @@ app.post('/debug/create-stub', (req, res) => {
     }
 });
 
+// Debug endpoint to test single instruction disassembly
+app.get('/debug/disasm/:address', (req, res) => {
+    try {
+        const address = parseInt(req.params.address, 16);
+        
+        if (!interpreter.kickstartDisassembler) {
+            return res.status(400).json({
+                success: false,
+                error: 'Kickstart disassembler not initialized'
+            });
+        }
+        
+        // Test disassembly of single instruction
+        const instruction = interpreter.kickstartDisassembler.disassembleInstructionAtPC(address);
+        
+        res.json({
+            success: true,
+            address: address,
+            addressHex: `0x${address.toString(16)}`,
+            instruction: instruction
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to disassemble instruction: ' + error.message });
+    }
+});
+
 // Debug endpoint to inspect specific addresses
 app.get('/debug/address/:address', (req, res) => {
     try {
@@ -693,6 +719,228 @@ app.post('/test/reinit-vectors', (req, res) => {
     } catch (error) {
         console.error('Vector re-init error:', error);
         res.status(500).json({ error: 'Failed to re-initialize vectors: ' + error.message });
+    }
+});
+
+// *** KICKSTART DISASSEMBLY ENDPOINTS ***
+
+// Initialize kickstart disassembly after ROM loading
+app.post('/kickstart/disassemble', async (req, res) => {
+    try {
+        console.log('🔍 [SERVER] Kickstart disassembly requested...');
+        
+        const result = await interpreter.initializeKickstartDisassembly();
+        
+        if (result.success) {
+            res.json({
+                success: true,
+                message: `Kickstart disassembled: ${result.disassembly.totalInstructions} instructions`,
+                disassembly: result.disassembly,
+                frontend: result.frontendData
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: result.error
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Kickstart disassembly error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to disassemble kickstart: ' + error.message
+        });
+    }
+});
+
+// Enable validation mode for step-through execution
+app.post('/kickstart/validation/enable', (req, res) => {
+    try {
+        const result = interpreter.enableValidationMode();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Enable validation error:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Disable validation mode
+app.post('/kickstart/validation/disable', (req, res) => {
+    try {
+        const result = interpreter.disableValidationMode();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Disable validation error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Reset validation state
+app.post('/kickstart/validation/reset', (req, res) => {
+    try {
+        const result = interpreter.resetKickstartValidation();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ [SERVER] Reset validation error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get kickstart status and disassembly
+app.get('/kickstart/status', (req, res) => {
+    try {
+        const status = interpreter.getKickstartStatus();
+        res.json({
+            success: true,
+            status: status
+        });
+    } catch (error) {
+        console.error('❌ [SERVER] Get kickstart status error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Enhanced step endpoint with validation
+app.post('/step-validated', async (req, res) => {
+    try {
+        console.log('👣 [SERVER] Validated step requested...');
+        
+        const result = await interpreter.stepWithValidation();
+        
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Validated step error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Step validation failed: ' + error.message
+        });
+    }
+});
+
+// Enhanced run endpoint with validation
+app.post('/run-validated', async (req, res) => {
+    try {
+        console.log('🏃 [SERVER] Validated run requested...');
+        
+        const result = await interpreter.runWithValidation();
+        
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Validated run error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Run validation failed: ' + error.message
+        });
+    }
+});
+
+// Get disassembly for frontend display
+app.get('/kickstart/disassembly', (req, res) => {
+    try {
+        if (!interpreter.kickstartDisassembler) {
+            return res.status(400).json({
+                success: false,
+                error: 'Kickstart not disassembled yet - run /kickstart/disassemble first'
+            });
+        }
+        
+        const frontendData = interpreter.kickstartDisassembler.getDisassemblyForFrontend();
+        
+        res.json({
+            success: true,
+            disassembly: frontendData
+        });
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Get disassembly error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Complete workflow endpoint: Load ROM + Disassemble + Enable Validation
+app.post('/kickstart/initialize-complete', async (req, res) => {
+    try {
+        console.log('🚀 [SERVER] Complete kickstart initialization workflow...');
+        
+        // Step 1: Load ROM (if not already loaded)
+        if (!interpreter.memory.romResetVectors) {
+            console.log('📁 [SERVER] Loading default ROM first...');
+            const romResult = interpreter.memory.loadDefaultROM();
+            if (!romResult.success) {
+                throw new Error('ROM loading failed: ' + romResult.error);
+            }
+        }
+        
+        // Step 2: Initialize CPU from ROM vectors
+        if (!interpreter.memory.romDrivenMode) {
+            console.log('🎯 [SERVER] Enabling ROM-driven mode...');
+            const romModeResult = interpreter.memory.enableROMDrivenMode();
+            if (!romModeResult.success) {
+                throw new Error('ROM-driven mode failed: ' + romModeResult.error);
+            }
+            
+            const cpuInitResult = interpreter.cpu.initializeFromROMVectors(interpreter.memory.romResetVectors);
+            if (!cpuInitResult.success) {
+                throw new Error('CPU initialization failed: ' + cpuInitResult.error);
+            }
+        }
+        
+        // Step 3: Disassemble kickstart initialization
+        console.log('🔍 [SERVER] Disassembling kickstart...');
+        const disasmResult = await interpreter.initializeKickstartDisassembly();
+        if (!disasmResult.success) {
+            throw new Error('Disassembly failed: ' + disasmResult.error);
+        }
+        
+        // Step 4: Enable validation mode
+        console.log('🔒 [SERVER] Enabling validation mode...');
+        const validationResult = interpreter.enableValidationMode();
+        if (!validationResult.success) {
+            throw new Error('Validation mode failed: ' + validationResult.error);
+        }
+        
+        // Return complete status
+        res.json({
+            success: true,
+            message: 'Kickstart initialization complete - ready for validated execution',
+            workflow: {
+                romLoaded: true,
+                cpuInitialized: true,
+                disassembled: true,
+                validationEnabled: true
+            },
+            disassembly: {
+                totalInstructions: disasmResult.disassembly.totalInstructions,
+                checksum: disasmResult.disassembly.checksum
+            },
+            resetVectors: interpreter.memory.romResetVectors,
+            frontend: disasmResult.frontendData
+        });
+        
+    } catch (error) {
+        console.error('❌ [SERVER] Complete initialization error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Complete initialization failed: ' + error.message
+        });
     }
 });
 

@@ -1,0 +1,27 @@
+
+> 68k-nodejs@1.0.0 start
+> node server.js
+
+🚀 [SERVER] Initializing Amiga interpreter...
+🏗️ [MEMORY] MemoryManager initialized - ready for Kickstart ROM loading
+🏗️ [MEMORY] MemoryManager initialized - local ROM loading enabled
+🔍 [ROM] Checking ROM directory...
+✅ [ROM] Found: Kickstart 3.1 (A1200) (kick40068.A1200)
+❌ [ROM] Missing: Kickstart 3.1 (A4000) (kick40068.A4000)
+📋 [ROM] 1/2 ROMs available
+✅ [SERVER] Interpreter initialized - ROM endpoints ready
+Amiga Executable Runner server running on port 3000
+Open http://localhost:3000 to upload and run Amiga executables
+🚀 [SERVER] Complete kickstart initialization workflow...
+📁 [SERVER] Loading default ROM first...
+❌ [SERVER] Complete initialization error: TypeError: interpreter.memory.loadAvailableROM is not a function
+    at /home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/server.js:886:56
+    at Layer.handle [as handle_request] (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/layer.js:95:5)
+    at /home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/index.js:280:10)
+    at serveStatic (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/serve-static/index.js:75:16)
+    at Layer.handle [as handle_request] (/home/dizimatt/Documents/ai-assisted-projects/68k-nodejs/node_modules/express/lib/router/layer.js:95:5)
